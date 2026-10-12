@@ -1,0 +1,100 @@
+@import url("https://fonts.googleapis.com/css2?family=VT323&family=Silkscreen:wght@400;700&display=swap");
+
+:root {
+  /* Overlay layers */
+  --z-overlay: 400;
+
+  --z-spotlight: 1000; /* Tutorial spotlights/guided help */
+
+  /* System layers */
+  --z-critical: 2000; /* Critical system notifications */
+
+  /* spacing */
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-12: 3rem;
+  --spacing-16: 4rem;
+  --spacing-20: 5rem;
+}
+
+:root {
+  --background: #0b0d12;
+  --foreground: #c9d1d9;
+  --surface: #2b3140;
+  --surface-foreground: #c9d1d9;
+  --sidebar: #232834;
+  --sidebar-foreground: #c9d1d9;
+  --card: #2b3140;
+  --card-foreground: #c9d1d9;
+  --popup: #232834;
+  --popup-foreground: #c9d1d9;
+
+  --primary: #00e000;
+  --primary-foreground: #021002;
+  --secondary: #3a4152;
+  --secondary-foreground: #c9d1d9;
+  --accent: #ff9d00;
+  --accent-foreground: #1a0f00;
+  --muted: #1b1f29;
+  --muted-foreground: #7f8aa0;
+
+  --success: #00e000;
+  --success-foreground: #021002;
+  --error: #ff4a3d;
+  --error-foreground: #1a0300;
+  --warning: #ff9d00;
+  --warning-foreground: #1a0f00;
+  --info: #4aa3ff;
+  --info-foreground: #00101f;
+  --info-hover: #6bb4ff;
+  --info-active: #2f8ae6;
+
+  --border: #0a0c10;
+
+  --font-family-base: "Silkscreen", "Tahoma", sans-serif;
+  --font-family-display: "VT323", "Courier New", monospace;
+  --font-family-monospace: "VT323", "Courier New", monospace;
+  --font-family-cursive: "VT323", monospace;
+
+  --shadow: none;
+  --shadow-md: 2px 2px 0 #000;
+  --shadow-lg: 4px 4px 0 #000;
+  --shadow-focus: 0 0 0 1px #00e000;
+
+  --radius-sm: 0;
+  --radius: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-full: 9999px;
+
+  --animation-duration-fast: 80ms;
+  --animation-duration-normal: 150ms;
+  --animation-duration-slow: 300ms;
+
+  --chart-color-1: #00e000;
+  --chart-color-2: #ff9d00;
+  --chart-color-3: #4aa3ff;
+  --chart-color-4: #ff4a3d;
+  --chart-color-5: #c9d1d9;
+
+  /* Winamp-specific */
+  --wa-bevel-light: #6d7690;
+  --wa-bevel-dark: #0d1017;
+  --wa-chrome: #2b3140;
+  --wa-chrome-2: #3a4152;
+  --wa-lcd-bg: #000;
+  --wa-lcd-green: #00e000;
+  --wa-lcd-dim: #0a5a0a;
+  --wa-title-1: #3c5a96;
+  --wa-title-2: #1d2c52;
+  --wa-orange: #ff9d00;
+}
+
+.dark {
+  --background: #0b0d12;
+  --foreground: #c9d1d9;
+}
