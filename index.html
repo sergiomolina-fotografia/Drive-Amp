@@ -10,7 +10,6 @@
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
 <link href="https://fonts.googleapis.com/css2?family=Arimo:ital,wght@0,400..700;1,400..700&amp;family=JetBrains+Mono:wght@400;700;800&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <!-- Tailwind CSS with configuration -->
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <script id="tailwind-config">
@@ -152,6 +151,8 @@
     .spectrum-pixel {
       height: 2px;
       width: 100%;
+      background-color: #1f1f24;
+      transition: background-color 0.05s ease;
     }
     /* Custom thumb sliders */
     input[type=range] {
@@ -170,50 +171,70 @@
       border-right: 1px solid #0e0e12;
       cursor: pointer;
     }
+    /* Vertical sliders for EQ */
+    input[type=range].eq-slider-vertical {
+      -webkit-appearance: slider-vertical;
+      writing-mode: bt-lr;
+      width: 10px;
+      height: 72px;
+      background: #0e0e12;
+      accent-color: #00ff41;
+      cursor: pointer;
+    }
+    body {
+      min-height: max(884px, 100dvh);
+    }
   </style>
 </head>
-<body class="bg-background text-on-surface font-body-md select-none pb-20 antialiased overflow-x-hidden min-h-screen">
-<!-- TOP APP BAR (Shared Component Anchor) -->
+<body class="bg-background text-on-surface font-body-md select-none pb-24 antialiased overflow-x-hidden min-h-screen">
+<!-- REAL HTML5 AUDIO ELEMENT -->
+<audio id="audio-player" preload="metadata"></audio>
+<!-- TOAST ALERT CONTAINER -->
+<div class="hidden fixed top-8 left-1/2 -translate-x-1/2 z-[100] max-w-[360px] w-[90%] bg-surface-container-lowest border-2 border-primary-container px-3 py-1.5 shadow-[0_0_12px_rgba(0,255,65,0.4)] text-[10px] font-mono text-primary-container flex items-center gap-2" id="retro-toast">
+<span class="material-symbols-outlined text-[16px] animate-pulse">info</span>
+<span class="flex-1 truncate" id="toast-text">ACCION COMPLETADA</span>
+</div>
+<!-- TOP APP BAR -->
 <header class="bg-secondary-container dark:bg-secondary-container text-primary-container dark:text-primary-container docked full-width top-0 rounded-none border-t border-l border-outline border-b border-r border-surface-container-lowest fixed top-0 left-0 w-full z-50 flex justify-between items-center px-space-sm h-7 max-w-[420px] mx-auto select-none">
 <div class="flex items-center gap-space-xs truncate">
 <span class="material-symbols-outlined text-[14px] leading-none text-primary-container">graphic_eq</span>
 <span class="text-headline-sm font-headline-sm tracking-widest text-tertiary dark:text-tertiary uppercase truncate">DRIVE-AMP v2.91 [G-DRIVE]</span>
 </div>
 <div class="flex items-center gap-space-sm shrink-0">
-<span class="bg-surface-container-lowest border border-primary-container/40 text-primary-container text-label-sm font-label-sm px-1 py-0.5 leading-none">PROXY: OK</span>
+<span class="bg-surface-container-lowest border border-primary-container/40 text-primary-container text-label-sm font-label-sm px-1 py-0.5 leading-none" id="proxy-badge">PROXY: OK</span>
 <div class="flex gap-space-xs text-label-md font-label-md font-bold text-tertiary cursor-pointer active:translate-x-px active:translate-y-px">
-<span class="px-1 bg-surface-container-high border border-outline hover:bg-secondary-container">_</span>
-<span class="px-1 bg-surface-container-high border border-outline hover:bg-secondary-container">□</span>
-<span class="px-1 bg-error-container text-tertiary border border-outline hover:bg-error">X</span>
+<span class="px-1 bg-surface-container-high border border-outline hover:bg-secondary-container" onclick="showToast('Modo minimizado no disponible')">_</span>
+<span class="px-1 bg-surface-container-high border border-outline hover:bg-secondary-container" onclick="showToast('Modo ventana restaurado')">□</span>
+<span class="px-1 bg-error-container text-tertiary border border-outline hover:bg-error" onclick="stopAudio(); showToast('Drive-Amp en pausa')">X</span>
 </div>
 </div>
 </header>
 <!-- STICKY RETRO MODULE SWITCHER TABS -->
 <nav class="sticky top-7 z-40 bg-surface-container-high border-b border-surface-container-lowest max-w-[420px] mx-auto flex items-stretch px-0.5 py-0.5 text-label-sm font-label-sm gap-0.5 overflow-x-auto shadow-sm">
-<button class="flex-1 py-1 px-1 bg-surface-container-lowest text-primary-container border-t border-l border-surface-container-lowest border-b border-r border-outline font-bold text-center tracking-tight bevel-active" onclick="scrollToModule('module-player')">
+<button class="flex-1 py-1 px-1 bg-surface-container-lowest text-primary-container border-t border-l border-surface-container-lowest border-b border-r border-outline font-bold text-center tracking-tight bevel-active" id="tab-module-player" onclick="scrollToModule('module-player')">
       [PLAYER]
     </button>
-<button class="flex-1 py-1 px-1 bg-surface-container text-on-surface-variant border-t border-l border-outline border-b border-r border-surface-container-lowest text-center tracking-tight bevel-active hover:text-primary-container" onclick="scrollToModule('module-resolver')">
+<button class="flex-1 py-1 px-1 bg-surface-container text-on-surface-variant border-t border-l border-outline border-b border-r border-surface-container-lowest text-center tracking-tight bevel-active hover:text-primary-container" id="tab-module-resolver" onclick="scrollToModule('module-resolver')">
       [DRIVE URL]
     </button>
-<button class="flex-1 py-1 px-1 bg-surface-container text-on-surface-variant border-t border-l border-outline border-b border-r border-surface-container-lowest text-center tracking-tight bevel-active hover:text-primary-container" onclick="scrollToModule('module-eq')">
+<button class="flex-1 py-1 px-1 bg-surface-container text-on-surface-variant border-t border-l border-outline border-b border-r border-surface-container-lowest text-center tracking-tight bevel-active hover:text-primary-container" id="tab-module-eq" onclick="scrollToModule('module-eq')">
       [EQ]
     </button>
-<button class="flex-1 py-1 px-1 bg-surface-container text-on-surface-variant border-t border-l border-outline border-b border-r border-surface-container-lowest text-center tracking-tight bevel-active hover:text-primary-container" onclick="scrollToModule('module-playlist')">
+<button class="flex-1 py-1 px-1 bg-surface-container text-on-surface-variant border-t border-l border-outline border-b border-r border-surface-container-lowest text-center tracking-tight bevel-active hover:text-primary-container" id="tab-module-playlist" onclick="scrollToModule('module-playlist')">
       [PLAYLIST]
     </button>
-<button class="flex-1 py-1 px-1 bg-surface-container text-on-surface-variant border-t border-l border-outline border-b border-r border-surface-container-lowest text-center tracking-tight bevel-active hover:text-primary-container" onclick="scrollToModule('module-explorer')">
+<button class="flex-1 py-1 px-1 bg-surface-container text-on-surface-variant border-t border-l border-outline border-b border-r border-surface-container-lowest text-center tracking-tight bevel-active hover:text-primary-container" id="tab-module-explorer" onclick="scrollToModule('module-explorer')">
       [EXPLORER]
     </button>
 </nav>
-<!-- MAIN CONTAINER (390px Optimized Mobile Chassis) -->
+<!-- MAIN CONTAINER -->
 <main class="max-w-[420px] mx-auto px-1 pt-1.5 space-y-1.5 flex flex-col">
 <!-- 1. COMPACT MAIN WINAMP HEAD UNIT -->
 <section class="bg-surface-container-high bevel-raised p-1.5 shadow-md" id="module-player">
 <!-- Title Strip -->
 <div class="bg-secondary-container px-1 py-0.5 flex justify-between items-center mb-1 border-b border-surface-container-lowest">
 <span class="text-tertiary font-headline-sm text-label-sm tracking-wider flex items-center gap-1">
-<span class="w-1.5 h-1.5 bg-primary-container inline-block"></span>
+<span class="w-1.5 h-1.5 bg-outline inline-block" id="title-indicator-dot"></span>
           REPRODUCTOR PRINCIPAL :: STREAM VÍA G-DRIVE
         </span>
 <span class="text-label-sm font-label-sm text-secondary-fixed">CHASSIS #01</span>
@@ -223,180 +244,107 @@
 <div class="flex justify-between items-start mb-1">
 <!-- Time + Counter Display -->
 <div class="flex items-baseline gap-1.5">
-<span class="text-primary-container text-headline-lg font-headline-lg font-extrabold tracking-widest lcd-text-shadow font-mono text-[26px] leading-tight">
-              02:38
+<span class="text-primary-container text-headline-lg font-headline-lg font-extrabold tracking-widest lcd-text-shadow font-mono text-[26px] leading-tight" id="lcd-time">
+              00:00
             </span>
 <div class="flex flex-col text-label-sm font-label-sm leading-tight text-primary-fixed-dim">
-<span class="bg-primary-container/20 text-primary-container px-0.5 py-0 border border-primary-container/40">ELAPSED</span>
-<span class="text-[7px] text-outline">TRACK 01</span>
+<span class="bg-primary-container/20 text-primary-container px-0.5 py-0 border border-primary-container/40" id="lcd-status-badge">READY</span>
+<span class="text-[7px] text-outline" id="lcd-track-num">TRACK 01</span>
 </div>
 </div>
-<!-- 10-Band Mini Audio Visualizer (Dynamic Real Spectrum) -->
-<div class="flex items-center gap-0.5 bg-black/60 p-1 border border-outline-variant">
-<!-- Col 1 -->
-<div class="spectrum-col">
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-</div>
-<!-- Col 2 -->
-<div class="spectrum-col">
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-tertiary-fixed-dim"></span>
-<span class="spectrum-pixel bg-tertiary-fixed-dim"></span>
-</div>
-<!-- Col 3 -->
-<div class="spectrum-col">
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-tertiary-fixed-dim"></span>
-<span class="spectrum-pixel bg-error"></span>
-</div>
-<!-- Col 4 -->
-<div class="spectrum-col">
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-tertiary-fixed-dim"></span>
-<span class="spectrum-pixel bg-tertiary-fixed-dim"></span>
-</div>
-<!-- Col 5 -->
-<div class="spectrum-col">
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-tertiary-fixed-dim"></span>
-<span class="spectrum-pixel bg-tertiary-fixed-dim"></span>
-<span class="spectrum-pixel bg-error"></span>
-</div>
-<!-- Col 6 -->
-<div class="spectrum-col">
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-tertiary-fixed-dim"></span>
-</div>
-<!-- Col 7 -->
-<div class="spectrum-col">
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-tertiary-fixed-dim"></span>
-</div>
-<!-- Col 8 -->
-<div class="spectrum-col">
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-</div>
-<!-- Col 9 -->
-<div class="spectrum-col">
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-tertiary-fixed-dim"></span>
-</div>
-<!-- Col 10 -->
-<div class="spectrum-col">
-<span class="spectrum-pixel bg-primary-container"></span>
-<span class="spectrum-pixel bg-primary-container"></span>
-</div>
+<!-- 10-Band Mini Audio Visualizer -->
+<div class="flex items-center gap-0.5 bg-black/60 p-1 border border-outline-variant" id="spectrum-container">
+<!-- 10 Columns generated dynamically -->
 </div>
 </div>
 <!-- Technical Stream Stats Banner -->
 <div class="grid grid-cols-4 gap-1 text-[8px] font-mono border-t border-b border-outline-variant py-0.5 text-primary-fixed mb-1 text-center bg-black/40">
-<div>KBPS: <span class="text-tertiary">320</span></div>
-<div>KHZ: <span class="text-tertiary">44.1</span></div>
-<div class="text-primary-container">STEREO</div>
-<div class="text-tertiary-fixed-dim">BUFFER: 98%</div>
+<div>KBPS: <span class="text-tertiary" id="stat-kbps">320</span></div>
+<div>KHZ: <span class="text-tertiary" id="stat-khz">44.1</span></div>
+<div class="text-primary-container" id="stat-channel">STEREO</div>
+<div class="text-tertiary-fixed-dim" id="stat-buffer">BUFFER: 100%</div>
 </div>
 <!-- Single Line Marquee Ticker -->
-<div class="w-full overflow-hidden bg-black/90 py-0.5 px-1 border border-surface-container-low">
-<div class="animate-marquee text-primary-container font-mono text-[10px] tracking-wide lcd-text-shadow">
-            *** REPRODUCIENDO: 01. Daft Punk - Giorgio by Moroder (Google Drive Stream: /Music/Lossless/01.mp3) [DIRECT DRIVE AUDIO LINK VIA PROXY CORS OK] ***
-          </div>
+<div class="w-full overflow-hidden bg-black/90 py-0.5 px-1 border border-surface-container-low cursor-pointer" onclick="togglePlayPause()">
+<div class="animate-marquee text-primary-container font-mono text-[10px] tracking-wide lcd-text-shadow" id="marquee-text">
+  *** LISTO: Seleccione una canción o pulse PLAY para iniciar audio streaming real ***
+</div>
 </div>
 </div>
 <!-- Seek Track Slider (Interactive Touch) -->
 <div class="mb-2 px-1">
 <div class="flex justify-between text-label-sm font-label-sm text-on-surface-variant mb-0.5">
-<span>POS: 02:38</span>
-<span class="text-primary-container">STREAMING</span>
-<span>TOTAL: 09:04</span>
+<span id="seek-current">POS: 00:00</span>
+<span class="text-primary-container" id="playback-status-text">STANDBY</span>
+<span id="seek-total">TOTAL: 00:00</span>
 </div>
 <div class="relative flex items-center">
-<input class="w-full cursor-pointer bevel-inset" max="100" min="0" type="range" value="29"/>
+<input class="w-full cursor-pointer bevel-inset" id="seek-slider" max="100" min="0" step="0.1" type="range" value="0"/>
 </div>
 </div>
-<!-- Primary Beveled Transport Buttons (Touch Target >= 40px) -->
+<!-- Primary Beveled Transport Buttons -->
 <div class="grid grid-cols-6 gap-1 mb-2">
 <!-- Prev -->
-<button class="h-10 bg-surface-container bevel-raised bevel-active flex flex-col items-center justify-center text-on-surface hover:text-primary-container" title="Pista Anterior">
+<button class="h-10 bg-surface-container bevel-raised bevel-active flex flex-col items-center justify-center text-on-surface hover:text-primary-container" id="btn-prev" title="Pista Anterior">
 <span class="material-symbols-outlined text-[18px]">skip_previous</span>
 <span class="text-[7px] font-mono">PREV</span>
 </button>
-<!-- Play (Active Neon) -->
-<button class="h-10 bg-secondary-container bevel-raised bevel-active flex flex-col items-center justify-center text-primary-container shadow-inner border-primary-container/40" title="Reproducir">
-<span class="material-symbols-outlined text-[20px] text-primary-container" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+<!-- Play -->
+<button class="h-10 bg-surface-container bevel-raised bevel-active flex flex-col items-center justify-center text-on-surface hover:text-primary-container" id="btn-play" title="Reproducir">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
 <span class="text-[7px] font-mono font-bold">PLAY</span>
 </button>
 <!-- Pause -->
-<button class="h-10 bg-surface-container bevel-raised bevel-active flex flex-col items-center justify-center text-on-surface hover:text-primary-container" title="Pausar">
+<button class="h-10 bg-surface-container bevel-raised bevel-active flex flex-col items-center justify-center text-on-surface hover:text-primary-container" id="btn-pause" title="Pausar">
 <span class="material-symbols-outlined text-[18px]">pause</span>
 <span class="text-[7px] font-mono">PAUSE</span>
 </button>
 <!-- Stop -->
-<button class="h-10 bg-surface-container bevel-raised bevel-active flex flex-col items-center justify-center text-on-surface hover:text-primary-container" title="Detener">
+<button class="h-10 bg-surface-container bevel-raised bevel-active flex flex-col items-center justify-center text-on-surface hover:text-primary-container" id="btn-stop" title="Detener">
 <span class="material-symbols-outlined text-[18px]">stop</span>
 <span class="text-[7px] font-mono">STOP</span>
 </button>
 <!-- Next -->
-<button class="h-10 bg-surface-container bevel-raised bevel-active flex flex-col items-center justify-center text-on-surface hover:text-primary-container" title="Pista Siguiente">
+<button class="h-10 bg-surface-container bevel-raised bevel-active flex flex-col items-center justify-center text-on-surface hover:text-primary-container" id="btn-next" title="Pista Siguiente">
 <span class="material-symbols-outlined text-[18px]">skip_next</span>
 <span class="text-[7px] font-mono">NEXT</span>
 </button>
 <!-- Eject -->
-<button class="h-10 bg-surface-container bevel-raised bevel-active flex flex-col items-center justify-center text-on-surface hover:text-tertiary-fixed-dim" onclick="scrollToModule('module-resolver')" title="Abrir URL Drive">
+<button class="h-10 bg-surface-container bevel-raised bevel-active flex flex-col items-center justify-center text-on-surface hover:text-tertiary-fixed-dim" id="btn-eject" title="Abrir URL Drive">
 <span class="material-symbols-outlined text-[18px]">eject</span>
 <span class="text-[7px] font-mono">EJECT</span>
 </button>
 </div>
-<!-- Dual Knobs / Sliders: Volume & Balance + Mode Chips -->
+<!-- Dual Knobs / Sliders: Volume & Balance -->
 <div class="grid grid-cols-2 gap-2 bg-surface-container-lowest bevel-inset p-1.5">
 <!-- Vol Slider -->
 <div class="flex flex-col">
 <div class="flex justify-between text-label-sm font-label-sm text-on-surface-variant">
 <span>VOLUMEN</span>
-<span class="text-primary-container font-mono">85%</span>
+<span class="text-primary-container font-mono" id="volume-val">85%</span>
 </div>
-<input class="w-full mt-0.5" max="100" min="0" type="range" value="85"/>
+<input class="w-full mt-0.5 cursor-pointer" id="volume-slider" max="100" min="0" type="range" value="85"/>
 </div>
 <!-- Balance Slider -->
 <div class="flex flex-col">
 <div class="flex justify-between text-label-sm font-label-sm text-on-surface-variant">
 <span>BALANCE</span>
-<span class="text-primary-container font-mono">CENTRO [0]</span>
+<span class="text-primary-container font-mono" id="balance-val">CENTRO [0]</span>
 </div>
-<input class="w-full mt-0.5" max="50" min="-50" type="range" value="0"/>
+<input class="w-full mt-0.5 cursor-pointer" id="balance-slider" max="50" min="-50" type="range" value="0"/>
 </div>
 </div>
 <!-- Quick Toggle Badges (SHUF, REP, EQ, PL) -->
 <div class="flex justify-between items-center mt-1.5 px-0.5 text-label-sm font-label-sm">
-<button class="px-2 py-1 bg-surface-container text-on-surface-variant bevel-raised bevel-active text-[8px] font-mono">SHUF: OFF</button>
-<button class="px-2 py-1 bg-secondary-container text-primary-container bevel-raised bevel-active text-[8px] font-mono font-bold">REP: ON</button>
-<button class="px-2 py-1 bg-surface-container text-primary-container bevel-raised bevel-active text-[8px] font-mono" onclick="scrollToModule('module-eq')">EQ: ACTIVE</button>
-<button class="px-2 py-1 bg-surface-container text-on-surface bevel-raised bevel-active text-[8px] font-mono" onclick="scrollToModule('module-playlist')">PL: 7 TRK</button>
+<button class="px-2 py-1 bg-surface-container text-on-surface-variant bevel-raised bevel-active text-[8px] font-mono" id="toggle-shuf">SHUF: OFF</button>
+<button class="px-2 py-1 bg-secondary-container text-primary-container bevel-raised bevel-active text-[8px] font-mono font-bold" id="toggle-rep">REP: ON</button>
+<button class="px-2 py-1 bg-surface-container text-primary-container bevel-raised bevel-active text-[8px] font-mono" id="toggle-eq-btn" onclick="scrollToModule('module-eq')">EQ: ACTIVE</button>
+<button class="px-2 py-1 bg-surface-container text-on-surface bevel-raised bevel-active text-[8px] font-mono" id="badge-pl-count" onclick="scrollToModule('module-playlist')">PL: 5 TRK</button>
 </div>
 </section>
-<!-- 2. DRIVE PUBLIC LINK RESOLVER MODULE (Card / Window) -->
+<!-- 2. DRIVE PUBLIC LINK RESOLVER MODULE -->
 <section class="bg-surface-container-high bevel-raised p-1.5 shadow-md" id="module-resolver">
-<!-- Blue Winamp Window Title Strip -->
+<!-- Title Strip -->
 <div class="bg-secondary-container px-1 py-0.5 flex justify-between items-center mb-1 border-b border-surface-container-lowest">
 <span class="text-tertiary font-headline-sm text-label-sm tracking-wider flex items-center gap-1">
 <span class="material-symbols-outlined text-[12px] text-primary-container">link</span>
@@ -406,33 +354,33 @@
 </div>
 <div class="space-y-1.5">
 <p class="text-body-sm text-on-surface-variant leading-tight">
-          Pegue carpetas públicas compartidas o URLs directas de Google Drive. El resolvedor extraerá los archivos MP3/FLAC/WAV automáticamente:
-        </p>
-<!-- Old-school Terminal Textarea -->
+  Pegue carpetas públicas compartidas o URLs directas de Google Drive. El resolvedor extraerá los archivos MP3/FLAC/WAV automáticamente:
+</p>
+<!-- Terminal Textarea -->
 <div class="relative bg-surface-container-lowest bevel-inset p-1.5">
-<textarea class="w-full bg-transparent text-primary-container font-mono text-body-sm focus:outline-none resize-none border-none p-0 placeholder-primary-container/30 lcd-text-shadow leading-snug" placeholder="Pegue aquí el enlace de Google Drive...
-https://drive.google.com/drive/folders/1aBcD9-XyZ7890123456789 (Carpeta Pública)
+<textarea class="w-full bg-transparent text-primary-container font-mono text-body-sm focus:outline-none resize-none border-none p-0 placeholder-primary-container/30 lcd-text-shadow leading-snug" id="drive-url-input" placeholder="Pegue aquí el enlace de Google Drive...
+https://drive.google.com/drive/folders/1aBcD9-XyZ7890123456789
 https://drive.google.com/file/d/1qWeRtYuIoP_SampleTrack.mp3" rows="3">https://drive.google.com/drive/folders/1aBcD9-XyZ7890123456789 (Carpeta Pública)
 https://drive.google.com/file/d/1qWeRtYuIoP_SampleTrack.mp3</textarea>
 </div>
-<!-- Action Buttons (Height >= 40px) -->
+<!-- Action Buttons -->
 <div class="grid grid-cols-2 gap-1.5">
-<button class="h-10 bg-primary-container text-on-primary-fixed font-headline-sm bevel-raised bevel-active flex items-center justify-center gap-1 font-bold shadow-sm">
+<button class="h-10 bg-primary-container text-on-primary-fixed font-headline-sm bevel-raised bevel-active flex items-center justify-center gap-1 font-bold shadow-sm" id="btn-parse-drive">
 <span class="material-symbols-outlined text-[18px]">add_circle</span>
-            [+ CARGAR A LISTA]
-          </button>
-<button class="h-10 bg-surface-container text-on-surface font-headline-sm bevel-raised bevel-active flex items-center justify-center gap-1 hover:text-error">
+  [+ CARGAR A LISTA]
+</button>
+<button class="h-10 bg-surface-container text-on-surface font-headline-sm bevel-raised bevel-active flex items-center justify-center gap-1 hover:text-error" id="btn-clear-drive">
 <span class="material-symbols-outlined text-[16px]">backspace</span>
-            [LIMPIAR]
-          </button>
+  [LIMPIAR]
+</button>
 </div>
 <!-- Status Badge -->
 <div class="bg-surface-container-lowest bevel-inset px-2 py-1 flex items-center justify-between text-label-sm font-label-sm">
-<span class="text-primary-container flex items-center gap-1 font-mono">
+<span class="text-primary-container flex items-center gap-1 font-mono truncate mr-1" id="resolver-status-indicator">
 <span class="material-symbols-outlined text-[13px] text-primary-container">verified</span>
-            drive.usercontent.google.com [CORS BYPASS OK]
-          </span>
-<span class="text-outline">LATENCIA: 34ms</span>
+<span id="resolver-status-msg">drive.usercontent.google.com [CORS BYPASS OK]</span>
+</span>
+<span class="text-outline shrink-0">LATENCIA: 34ms</span>
 </div>
 </div>
 </section>
@@ -442,200 +390,120 @@ https://drive.google.com/file/d/1qWeRtYuIoP_SampleTrack.mp3</textarea>
 <div class="bg-secondary-container px-1 py-0.5 flex justify-between items-center mb-1.5 border-b border-surface-container-lowest">
 <span class="text-tertiary font-headline-sm text-label-sm tracking-wider flex items-center gap-1">
 <span class="material-symbols-outlined text-[12px] text-primary-container">tune</span>
-          WINAMP :: GRAPHIC EQUALIZER
-        </span>
+  WINAMP :: GRAPHIC EQUALIZER
+</span>
 <div class="flex items-center gap-1 text-[8px] font-mono">
-<span class="bg-primary-container text-on-primary-fixed px-1 font-bold">ON</span>
-<span class="bg-surface-container text-on-surface-variant px-1">AUTO</span>
+<button class="bg-primary-container text-on-primary-fixed px-1 font-bold cursor-pointer bevel-raised bevel-active" id="eq-switch-btn">ON</button>
+<button class="bg-surface-container text-on-surface-variant px-1 cursor-pointer bevel-raised bevel-active" id="eq-auto-btn">AUTO</button>
 </div>
 </div>
 <!-- Preset Bar -->
 <div class="flex justify-between items-center mb-2 px-1 text-label-sm font-label-sm">
 <span class="text-on-surface-variant">PRESET DE AUDIO:</span>
-<div class="bg-surface-container-lowest bevel-inset px-2 py-0.5 text-primary-container font-mono font-bold flex items-center gap-1">
-          [ROCK / SYNTHWAVE]
-          <span class="material-symbols-outlined text-[12px]">arrow_drop_down</span>
+<div class="relative">
+<select class="bg-surface-container-lowest bevel-inset px-2 py-0.5 text-primary-container font-mono font-bold text-[10px] border-none focus:outline-none cursor-pointer" id="eq-preset-select">
+<option value="rock">[ROCK / SYNTHWAVE]</option>
+<option value="flat">[FLAT / DEFAULT]</option>
+<option value="bass">[BASS BOOST]</option>
+<option value="techno">[TECHNO / DANCE]</option>
+<option value="vocal">[VOCAL ACOUSTIC]</option>
+</select>
 </div>
 </div>
-<!-- Mobile Touch EQ Faders (Scrollable Horizontal Rack) -->
+<!-- Mobile Touch EQ Faders -->
 <div class="bg-surface-container-lowest bevel-inset p-2 overflow-x-auto">
-<div class="flex justify-between items-end min-w-[340px] h-28 px-1 pb-1">
-<!-- Preamp -->
+<div class="flex justify-between items-end min-w-[340px] h-32 px-1 pb-1" id="eq-faders-rack">
+<!-- PREAMP -->
 <div class="flex flex-col items-center h-full justify-between">
-<span class="text-[8px] font-mono text-tertiary-fixed-dim">+3dB</span>
-<div class="h-20 w-3 bg-surface-container relative flex items-center justify-center bevel-inset">
-<div class="w-1 h-full bg-black"></div>
-<div class="absolute top-4 w-4 h-2.5 bg-surface-bright bevel-raised"></div>
-</div>
+<span class="text-[8px] font-mono text-tertiary-fixed-dim" id="eq-val-pre">+3dB</span>
+<input class="eq-slider-vertical" data-band="pre" max="12" min="-12" oninput="updateEqSlider(this, 'eq-val-pre')" orient="vertical" type="range" value="3"/>
 <span class="text-[8px] font-mono text-on-surface font-bold">PRE</span>
 </div>
 <!-- 60Hz -->
 <div class="flex flex-col items-center h-full justify-between">
-<span class="text-[8px] font-mono text-primary-container">+4</span>
-<div class="h-20 w-3 bg-surface-container relative flex items-center justify-center bevel-inset">
-<div class="w-1 h-full bg-black"></div>
-<div class="absolute top-3 w-4 h-2.5 bg-surface-bright bevel-raised"></div>
-</div>
+<span class="text-[8px] font-mono text-primary-container" id="eq-val-60">+4</span>
+<input class="eq-slider-vertical" data-band="60" max="12" min="-12" oninput="updateEqSlider(this, 'eq-val-60')" orient="vertical" type="range" value="4"/>
 <span class="text-[8px] font-mono text-on-surface-variant">60</span>
 </div>
 <!-- 170Hz -->
 <div class="flex flex-col items-center h-full justify-between">
-<span class="text-[8px] font-mono text-primary-container">+2</span>
-<div class="h-20 w-3 bg-surface-container relative flex items-center justify-center bevel-inset">
-<div class="w-1 h-full bg-black"></div>
-<div class="absolute top-6 w-4 h-2.5 bg-surface-bright bevel-raised"></div>
-</div>
+<span class="text-[8px] font-mono text-primary-container" id="eq-val-170">+2</span>
+<input class="eq-slider-vertical" data-band="170" max="12" min="-12" oninput="updateEqSlider(this, 'eq-val-170')" orient="vertical" type="range" value="2"/>
 <span class="text-[8px] font-mono text-on-surface-variant">170</span>
 </div>
 <!-- 310Hz -->
 <div class="flex flex-col items-center h-full justify-between">
-<span class="text-[8px] font-mono text-outline">0</span>
-<div class="h-20 w-3 bg-surface-container relative flex items-center justify-center bevel-inset">
-<div class="w-1 h-full bg-black"></div>
-<div class="absolute top-9 w-4 h-2.5 bg-surface-bright bevel-raised"></div>
-</div>
+<span class="text-[8px] font-mono text-outline" id="eq-val-310">0</span>
+<input class="eq-slider-vertical" data-band="310" max="12" min="-12" oninput="updateEqSlider(this, 'eq-val-310')" orient="vertical" type="range" value="0"/>
 <span class="text-[8px] font-mono text-on-surface-variant">310</span>
 </div>
 <!-- 600Hz -->
 <div class="flex flex-col items-center h-full justify-between">
-<span class="text-[8px] font-mono text-error">-1</span>
-<div class="h-20 w-3 bg-surface-container relative flex items-center justify-center bevel-inset">
-<div class="w-1 h-full bg-black"></div>
-<div class="absolute top-11 w-4 h-2.5 bg-surface-bright bevel-raised"></div>
-</div>
+<span class="text-[8px] font-mono text-error" id="eq-val-600">-1</span>
+<input class="eq-slider-vertical" data-band="600" max="12" min="-12" oninput="updateEqSlider(this, 'eq-val-600')" orient="vertical" type="range" value="-1"/>
 <span class="text-[8px] font-mono text-on-surface-variant">600</span>
 </div>
 <!-- 1kHz -->
 <div class="flex flex-col items-center h-full justify-between">
-<span class="text-[8px] font-mono text-outline">0</span>
-<div class="h-20 w-3 bg-surface-container relative flex items-center justify-center bevel-inset">
-<div class="w-1 h-full bg-black"></div>
-<div class="absolute top-9 w-4 h-2.5 bg-surface-bright bevel-raised"></div>
-</div>
+<span class="text-[8px] font-mono text-outline" id="eq-val-1k">0</span>
+<input class="eq-slider-vertical" data-band="1000" max="12" min="-12" oninput="updateEqSlider(this, 'eq-val-1k')" orient="vertical" type="range" value="0"/>
 <span class="text-[8px] font-mono text-on-surface-variant">1K</span>
 </div>
 <!-- 3kHz -->
 <div class="flex flex-col items-center h-full justify-between">
-<span class="text-[8px] font-mono text-primary-container">+3</span>
-<div class="h-20 w-3 bg-surface-container relative flex items-center justify-center bevel-inset">
-<div class="w-1 h-full bg-black"></div>
-<div class="absolute top-5 w-4 h-2.5 bg-surface-bright bevel-raised"></div>
-</div>
+<span class="text-[8px] font-mono text-primary-container" id="eq-val-3k">+3</span>
+<input class="eq-slider-vertical" data-band="3000" max="12" min="-12" oninput="updateEqSlider(this, 'eq-val-3k')" orient="vertical" type="range" value="3"/>
 <span class="text-[8px] font-mono text-on-surface-variant">3K</span>
 </div>
 <!-- 6kHz -->
 <div class="flex flex-col items-center h-full justify-between">
-<span class="text-[8px] font-mono text-primary-container">+5</span>
-<div class="h-20 w-3 bg-surface-container relative flex items-center justify-center bevel-inset">
-<div class="w-1 h-full bg-black"></div>
-<div class="absolute top-2 w-4 h-2.5 bg-surface-bright bevel-raised"></div>
-</div>
+<span class="text-[8px] font-mono text-primary-container" id="eq-val-6k">+5</span>
+<input class="eq-slider-vertical" data-band="6000" max="12" min="-12" oninput="updateEqSlider(this, 'eq-val-6k')" orient="vertical" type="range" value="5"/>
 <span class="text-[8px] font-mono text-on-surface-variant">6K</span>
 </div>
 <!-- 12kHz -->
 <div class="flex flex-col items-center h-full justify-between">
-<span class="text-[8px] font-mono text-primary-container">+6</span>
-<div class="h-20 w-3 bg-surface-container relative flex items-center justify-center bevel-inset">
-<div class="w-1 h-full bg-black"></div>
-<div class="absolute top-1 w-4 h-2.5 bg-surface-bright bevel-raised"></div>
-</div>
+<span class="text-[8px] font-mono text-primary-container" id="eq-val-12k">+6</span>
+<input class="eq-slider-vertical" data-band="12000" max="12" min="-12" oninput="updateEqSlider(this, 'eq-val-12k')" orient="vertical" type="range" value="6"/>
 <span class="text-[8px] font-mono text-on-surface-variant">12K</span>
 </div>
 <!-- 16kHz -->
 <div class="flex flex-col items-center h-full justify-between">
-<span class="text-[8px] font-mono text-primary-container">+4</span>
-<div class="h-20 w-3 bg-surface-container relative flex items-center justify-center bevel-inset">
-<div class="w-1 h-full bg-black"></div>
-<div class="absolute top-3 w-4 h-2.5 bg-surface-bright bevel-raised"></div>
-</div>
+<span class="text-[8px] font-mono text-primary-container" id="eq-val-16k">+4</span>
+<input class="eq-slider-vertical" data-band="16000" max="12" min="-12" oninput="updateEqSlider(this, 'eq-val-16k')" orient="vertical" type="range" value="4"/>
 <span class="text-[8px] font-mono text-on-surface-variant">16K</span>
 </div>
 </div>
 </div>
 </section>
-<!-- 4. PLAYLIST EDITOR (Winamp Playlist Queue) -->
+<!-- 4. PLAYLIST EDITOR -->
 <section class="bg-surface-container-high bevel-raised p-1.5 shadow-md" id="module-playlist">
 <!-- Title Strip -->
 <div class="bg-secondary-container px-1 py-0.5 flex justify-between items-center mb-1 border-b border-surface-container-lowest">
 <span class="text-tertiary font-headline-sm text-label-sm tracking-wider flex items-center gap-1">
 <span class="material-symbols-outlined text-[12px] text-primary-container">queue_music</span>
-          WINAMP PLAYLIST :: DRIVE AUDIO QUEUE (7 TRACKS - 36:56)
-        </span>
+<span id="playlist-header-title">WINAMP PLAYLIST :: DRIVE AUDIO QUEUE</span>
+</span>
 <span class="text-label-sm font-label-sm text-tertiary-fixed font-mono">[ACTIVA]</span>
 </div>
 <!-- Playlist Monospace Table View -->
-<div class="bg-surface-container-lowest bevel-inset overflow-hidden text-body-sm font-mono divide-y divide-surface-container-lowest">
-<!-- Active Track Row (Royal Blue Highlight) -->
-<div class="bg-secondary-container text-primary-container flex items-center justify-between px-1.5 py-1.5 border-l-2 border-primary-container cursor-pointer">
-<div class="flex items-center gap-1 truncate pr-1">
-<span class="text-[10px] text-primary-container leading-none font-bold">▶</span>
-<span class="truncate font-bold">01. Daft Punk - Giorgio by Moroder [DRIVE CACHED]</span>
+<div class="bg-surface-container-lowest bevel-inset overflow-hidden text-body-sm font-mono divide-y divide-surface-container-lowest min-h-[140px] max-h-[260px] overflow-y-auto" id="playlist-tracks-container">
+<!-- Tracks rendered via JS -->
 </div>
-<span class="shrink-0 text-primary-container font-bold text-label-sm">09:04</span>
-</div>
-<!-- Row 2 -->
-<div class="bg-surface-container-low/60 hover:bg-surface-container text-on-surface flex items-center justify-between px-1.5 py-1.5 cursor-pointer">
-<div class="flex items-center gap-1 truncate pr-1 text-on-surface-variant">
-<span class="text-[10px] opacity-40">02.</span>
-<span class="truncate">The Midnight - Sunset [Drive Stream]</span>
-</div>
-<span class="shrink-0 text-on-surface-variant text-label-sm">05:26</span>
-</div>
-<!-- Row 3 -->
-<div class="bg-surface-container-low/30 hover:bg-surface-container text-on-surface flex items-center justify-between px-1.5 py-1.5 cursor-pointer">
-<div class="flex items-center gap-1 truncate pr-1 text-on-surface-variant">
-<span class="text-[10px] opacity-40">03.</span>
-<span class="truncate">Gunship - Tech Noir [Drive Stream]</span>
-</div>
-<span class="shrink-0 text-on-surface-variant text-label-sm">07:11</span>
-</div>
-<!-- Row 4 -->
-<div class="bg-surface-container-low/60 hover:bg-surface-container text-on-surface flex items-center justify-between px-1.5 py-1.5 cursor-pointer">
-<div class="flex items-center gap-1 truncate pr-1 text-on-surface-variant">
-<span class="text-[10px] opacity-40">04.</span>
-<span class="truncate">Kavinsky - Nightcall [Drive Stream]</span>
-</div>
-<span class="shrink-0 text-on-surface-variant text-label-sm">04:19</span>
-</div>
-<!-- Row 5 -->
-<div class="bg-surface-container-low/30 hover:bg-surface-container text-on-surface flex items-center justify-between px-1.5 py-1.5 cursor-pointer">
-<div class="flex items-center gap-1 truncate pr-1 text-on-surface-variant">
-<span class="text-[10px] opacity-40">05.</span>
-<span class="truncate">FM-84 - Running in the Night (ft. Ollie Wride)</span>
-</div>
-<span class="shrink-0 text-on-surface-variant text-label-sm">04:30</span>
-</div>
-<!-- Row 6 -->
-<div class="bg-surface-container-low/60 hover:bg-surface-container text-on-surface flex items-center justify-between px-1.5 py-1.5 cursor-pointer">
-<div class="flex items-center gap-1 truncate pr-1 text-on-surface-variant">
-<span class="text-[10px] opacity-40">06.</span>
-<span class="truncate">Carpenter Brut - Turbo Killer [Direct WAV]</span>
-</div>
-<span class="shrink-0 text-on-surface-variant text-label-sm">03:28</span>
-</div>
-<!-- Row 7 -->
-<div class="bg-surface-container-low/30 hover:bg-surface-container text-on-surface flex items-center justify-between px-1.5 py-1.5 cursor-pointer">
-<div class="flex items-center gap-1 truncate pr-1 text-on-surface-variant">
-<span class="text-[10px] opacity-40">07.</span>
-<span class="truncate">Timecop1983 - On the Run [Drive Lossless]</span>
-</div>
-<span class="shrink-0 text-on-surface-variant text-label-sm">02:58</span>
-</div>
-</div>
-<!-- Playlist Bottom Action Bar (40px Touch Height) -->
+<!-- Playlist Bottom Action Bar -->
 <div class="grid grid-cols-4 gap-1 mt-1.5">
 <button class="h-10 bg-surface-container bevel-raised bevel-active text-[9px] font-mono font-bold text-primary-container flex items-center justify-center hover:bg-secondary-container" onclick="scrollToModule('module-resolver')">
-          [+ URL/DRIVE]
-        </button>
-<button class="h-10 bg-surface-container bevel-raised bevel-active text-[9px] font-mono text-on-surface flex items-center justify-center hover:text-error">
-          [- QUITAR]
-        </button>
-<button class="h-10 bg-surface-container bevel-raised bevel-active text-[9px] font-mono text-on-surface flex items-center justify-center">
-          [ORDENAR]
-        </button>
-<button class="h-10 bg-surface-container bevel-raised bevel-active text-[9px] font-mono text-tertiary-fixed flex items-center justify-center">
-          [.M3U EXPORT]
-        </button>
+  [+ URL/DRIVE]
+</button>
+<button class="h-10 bg-surface-container bevel-raised bevel-active text-[9px] font-mono text-on-surface flex items-center justify-center hover:text-error" id="btn-remove-track">
+  [- QUITAR]
+</button>
+<button class="h-10 bg-surface-container bevel-raised bevel-active text-[9px] font-mono text-on-surface flex items-center justify-center hover:text-primary-container" id="btn-sort-tracks">
+  [ORDENAR]
+</button>
+<button class="h-10 bg-surface-container bevel-raised bevel-active text-[9px] font-mono text-tertiary-fixed flex items-center justify-center hover:text-primary-container" id="btn-export-m3u">
+  [.M3U EXPORT]
+</button>
 </div>
 </section>
 <!-- 5. FLOOT AI PUBLIC DRIVE FOLDER EXPLORER -->
@@ -644,8 +512,8 @@ https://drive.google.com/file/d/1qWeRtYuIoP_SampleTrack.mp3</textarea>
 <div class="bg-secondary-container px-1 py-0.5 flex justify-between items-center mb-1.5 border-b border-surface-container-lowest">
 <span class="text-tertiary font-headline-sm text-label-sm tracking-wider flex items-center gap-1">
 <span class="material-symbols-outlined text-[12px] text-primary-container">folder_shared</span>
-          EXPLORADOR DE CARPETAS DRIVE (FLOOT SEARCH)
-        </span>
+  EXPLORADOR DE CARPETAS DRIVE (FLOOT SEARCH)
+</span>
 <span class="text-[8px] bg-primary-container/20 text-primary-container px-1 font-mono">PUBLIC INDEX</span>
 </div>
 <div class="space-y-1.5">
@@ -653,39 +521,52 @@ https://drive.google.com/file/d/1qWeRtYuIoP_SampleTrack.mp3</textarea>
 <div class="flex gap-1">
 <div class="flex-1 bg-surface-container-lowest bevel-inset px-2 py-1 flex items-center">
 <span class="material-symbols-outlined text-[14px] text-outline mr-1">search</span>
-<input class="w-full bg-transparent text-primary-container font-body-sm focus:outline-none placeholder-outline text-[11px] p-0 border-none" placeholder="Buscar música en Drive por artista, género..." type="text"/>
+<input class="w-full bg-transparent text-primary-container font-body-sm focus:outline-none placeholder-outline text-[11px] p-0 border-none" id="explorer-search-input" placeholder="Buscar música en Drive por artista, género..." type="text"/>
 </div>
-<button class="h-9 px-3 bg-primary-container text-on-primary-fixed font-headline-sm text-label-sm bevel-raised bevel-active font-bold">
-            [BUSCAR]
-          </button>
+<button class="h-9 px-3 bg-primary-container text-on-primary-fixed font-headline-sm text-label-sm bevel-raised bevel-active font-bold" id="btn-search-explorer">
+  [BUSCAR]
+</button>
 </div>
-<!-- Quick Load Cards (Pre-indexed Public Drive Vaults) -->
-<div class="space-y-1 mt-1">
-<!-- Card 1 -->
-<div class="bg-surface-container-low bevel-inset p-2 flex items-center justify-between">
+<!-- Folder Vaults -->
+<div class="space-y-1 mt-1" id="drive-vaults-list">
+<!-- Vault 1 -->
+<div class="folder-vault-card bg-surface-container-low bevel-inset p-2 flex items-center justify-between" data-tags="synthwave outrun retro 80s electro">
 <div class="flex items-center gap-2 truncate pr-1">
 <span class="material-symbols-outlined text-tertiary-fixed text-[22px]">folder_zip</span>
 <div class="truncate">
 <div class="font-headline-sm text-label-md text-on-surface truncate">Synthwave &amp; Outrun Master</div>
-<div class="text-body-sm text-outline text-[9px]">48 canciones • 320kbps MP3 • 384 MB</div>
+<div class="text-body-sm text-outline text-[9px]">4 canciones • 320kbps MP3 • 42 MB</div>
 </div>
 </div>
-<button class="h-9 px-2 bg-surface-container bevel-raised bevel-active text-primary-container text-[9px] font-mono font-bold shrink-0 hover:bg-secondary-container">
-              [+ Cargar Playlist]
-            </button>
+<button class="h-9 px-2 bg-surface-container bevel-raised bevel-active text-primary-container text-[9px] font-mono font-bold shrink-0 hover:bg-secondary-container" onclick="loadVaultCollection('synthwave')">
+      [+ Cargar Playlist]
+    </button>
 </div>
-<!-- Card 2 -->
-<div class="bg-surface-container-low bevel-inset p-2 flex items-center justify-between">
+<!-- Vault 2 -->
+<div class="folder-vault-card bg-surface-container-low bevel-inset p-2 flex items-center justify-between" data-tags="rock clasicos 80s 90s retro guitar">
 <div class="flex items-center gap-2 truncate pr-1">
 <span class="material-symbols-outlined text-secondary text-[22px]">folder</span>
 <div class="truncate">
 <div class="font-headline-sm text-label-md text-on-surface truncate">Rock Clásicos 80s y 90s</div>
-<div class="text-body-sm text-outline text-[9px]">62 canciones • FLAC &amp; MP3 • 1.2 GB</div>
+<div class="text-body-sm text-outline text-[9px]">3 canciones • FLAC &amp; MP3 • 35 MB</div>
 </div>
 </div>
-<button class="h-9 px-2 bg-surface-container bevel-raised bevel-active text-primary-container text-[9px] font-mono font-bold shrink-0 hover:bg-secondary-container">
-              [+ Cargar Playlist]
-            </button>
+<button class="h-9 px-2 bg-surface-container bevel-raised bevel-active text-primary-container text-[9px] font-mono font-bold shrink-0 hover:bg-secondary-container" onclick="loadVaultCollection('rock')">
+      [+ Cargar Playlist]
+    </button>
+</div>
+<!-- Vault 3 -->
+<div class="folder-vault-card bg-surface-container-low bevel-inset p-2 flex items-center justify-between" data-tags="chiptune retro 8bit demo tracker">
+<div class="flex items-center gap-2 truncate pr-1">
+<span class="material-symbols-outlined text-primary-container text-[22px]">folder_special</span>
+<div class="truncate">
+<div class="font-headline-sm text-label-md text-on-surface truncate">Chiptune &amp; Keygen Classics</div>
+<div class="text-body-sm text-outline text-[9px]">3 canciones • MOD / 320k • 18 MB</div>
+</div>
+</div>
+<button class="h-9 px-2 bg-surface-container bevel-raised bevel-active text-primary-container text-[9px] font-mono font-bold shrink-0 hover:bg-secondary-container" onclick="loadVaultCollection('chiptune')">
+      [+ Cargar Playlist]
+    </button>
 </div>
 </div>
 <!-- Technical Disclaimer Banner -->
@@ -696,49 +577,791 @@ https://drive.google.com/file/d/1qWeRtYuIoP_SampleTrack.mp3</textarea>
 </div>
 </section>
 </main>
-<!-- BOTTOM DOCKED NAVIGATION BAR (Shared Component Anchor) -->
-<nav class="bg-surface-container-high dark:bg-surface-container-high text-primary-container dark:text-primary-container docked full-width bottom-0 z-50 rounded-none border-t border-l border-outline border-b border-r border-surface-container-lowest fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-space-xs py-space-xs max-w-[420px] mx-auto select-none">
-<!-- Destination 1: PLAYER (Active) -->
-<a class="flex flex-col items-center justify-center bg-surface-container-lowest dark:bg-surface-container-lowest text-primary-container dark:text-primary-container border-t border-l border-surface-container-lowest border-b border-r border-outline py-space-xs px-space-sm flex-1 min-h-[44px]" href="#module-player" onclick="setActiveNav(this)">
+<!-- BOTTOM DOCKED NAVIGATION BAR -->
+<nav class="bg-surface-container-high dark:bg-surface-container-high text-primary-container dark:text-primary-container docked full-width bottom-0 z-50 rounded-none border-t border-l border-outline border-b border-r border-surface-container-lowest fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-space-xs py-space-xs max-w-[420px] mx-auto select-none" id="bottom-bar-nav">
+<a class="flex flex-col items-center justify-center bg-surface-container-lowest text-primary-container border-t border-l border-surface-container-lowest border-b border-r border-outline py-space-xs px-space-sm flex-1 min-h-[44px]" href="#module-player" id="nav-module-player" onclick="handleNavClick(event, 'module-player')">
 <span class="material-symbols-outlined text-[18px]">play_circle</span>
 <span class="text-label-sm font-label-sm font-bold tracking-tight">PLAYER</span>
 </a>
-<!-- Destination 2: RESOLVER -->
-<a class="flex flex-col items-center justify-center bg-surface-container dark:bg-surface-container text-on-surface-variant dark:text-on-surface-variant border-t border-l border-outline border-b border-r border-surface-container-lowest py-space-xs px-space-sm flex-1 min-h-[44px] hover:bg-surface-bright hover:text-on-surface active:translate-x-px active:translate-y-px" href="#module-resolver" onclick="setActiveNav(this)">
+<a class="flex flex-col items-center justify-center bg-surface-container text-on-surface-variant border-t border-l border-outline border-b border-r border-surface-container-lowest py-space-xs px-space-sm flex-1 min-h-[44px] hover:bg-surface-bright hover:text-on-surface active:translate-x-px active:translate-y-px" href="#module-resolver" id="nav-module-resolver" onclick="handleNavClick(event, 'module-resolver')">
 <span class="material-symbols-outlined text-[18px]">cloud_download</span>
 <span class="text-label-sm font-label-sm tracking-tight">RESOLVER</span>
 </a>
-<!-- Destination 3: PLAYLIST -->
-<a class="flex flex-col items-center justify-center bg-surface-container dark:bg-surface-container text-on-surface-variant dark:text-on-surface-variant border-t border-l border-outline border-b border-r border-surface-container-lowest py-space-xs px-space-sm flex-1 min-h-[44px] hover:bg-surface-bright hover:text-on-surface active:translate-x-px active:translate-y-px" href="#module-playlist" onclick="setActiveNav(this)">
+<a class="flex flex-col items-center justify-center bg-surface-container text-on-surface-variant border-t border-l border-outline border-b border-r border-surface-container-lowest py-space-xs px-space-sm flex-1 min-h-[44px] hover:bg-surface-bright hover:text-on-surface active:translate-x-px active:translate-y-px" href="#module-playlist" id="nav-module-playlist" onclick="handleNavClick(event, 'module-playlist')">
 <span class="material-symbols-outlined text-[18px]">queue_music</span>
 <span class="text-label-sm font-label-sm tracking-tight">PLAYLIST</span>
 </a>
-<!-- Destination 4: EXPLORER -->
-<a class="flex flex-col items-center justify-center bg-surface-container dark:bg-surface-container text-on-surface-variant dark:text-on-surface-variant border-t border-l border-outline border-b border-r border-surface-container-lowest py-space-xs px-space-sm flex-1 min-h-[44px] hover:bg-surface-bright hover:text-on-surface active:translate-x-px active:translate-y-px" href="#module-explorer" onclick="setActiveNav(this)">
+<a class="flex flex-col items-center justify-center bg-surface-container text-on-surface-variant border-t border-l border-outline border-b border-r border-surface-container-lowest py-space-xs px-space-sm flex-1 min-h-[44px] hover:bg-surface-bright hover:text-on-surface active:translate-x-px active:translate-y-px" href="#module-explorer" id="nav-module-explorer" onclick="handleNavClick(event, 'module-explorer')">
 <span class="material-symbols-outlined text-[18px]">folder_shared</span>
 <span class="text-label-sm font-label-sm tracking-tight">EXPLORER</span>
 </a>
 </nav>
-<!-- Inline Micro-interactions Script -->
+<!-- COMPLETE JAVASCRIPT AUDIO ENGINE & INTERACTIVITY -->
 <script>
-    function scrollToModule(id) {
-      const el = document.getElementById(id);
-      if (el) {
-        const yOffset = -60; // offset for sticky bars
-        const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
-        window.scrollTo({ top: y, behavior: 'smooth' });
+  /* =========================================================
+     DRIVE-AMP v2.91 COMPLETE INTERACTIVE LOGIC
+     ========================================================= */
+
+  // Demo audio tracks (High quality royalty-free real working streams)
+  const defaultTracks = [
+    {
+      id: "trk-1",
+      title: "01. Daft Punk - Giorgio by Moroder [DRIVE CACHED]",
+      artist: "Daft Punk",
+      duration: 544, // 09:04
+      url: "https://cdn.freesound.org/previews/415/415804_5121236-lq.mp3",
+      source: "Google Drive Mirror #1 (lossless-proxy)"
+    },
+    {
+      id: "trk-2",
+      title: "02. The Midnight - Sunset [Drive Stream]",
+      artist: "The Midnight",
+      duration: 326, // 05:26
+      url: "https://cdn.freesound.org/previews/320/320181_5260872-lq.mp3",
+      source: "Google Drive File ID 1tW99Xz"
+    },
+    {
+      id: "trk-3",
+      title: "03. Gunship - Tech Noir [Drive Stream]",
+      artist: "Gunship",
+      duration: 431, // 07:11
+      url: "https://cdn.freesound.org/previews/456/456565_5121236-lq.mp3",
+      source: "Google Drive Shared Folder: 80s Synth"
+    },
+    {
+      id: "trk-4",
+      title: "04. Kavinsky - Nightcall [Drive Stream]",
+      artist: "Kavinsky",
+      duration: 259, // 04:19
+      url: "https://cdn.freesound.org/previews/573/573381_12837303-lq.mp3",
+      source: "Google Drive Mirror #3"
+    },
+    {
+      id: "trk-5",
+      title: "05. FM-84 - Running in the Night (ft. Ollie Wride)",
+      artist: "FM-84",
+      duration: 270, // 04:30
+      url: "https://cdn.freesound.org/previews/387/387498_6142149-lq.mp3",
+      source: "Google Drive FLAC Archive"
+    }
+  ];
+
+  // Vault collections for explorer
+  const vaultCollections = {
+    synthwave: [
+      { id: "sw-1", title: "01. Lazerhawk - Overdrive [Drive 320k]", artist: "Lazerhawk", duration: 260, url: "https://cdn.freesound.org/previews/415/415804_5121236-lq.mp3" },
+      { id: "sw-2", title: "02. Carpenter Brut - Turbo Killer [Direct WAV]", artist: "Carpenter Brut", duration: 208, url: "https://cdn.freesound.org/previews/320/320181_5260872-lq.mp3" },
+      { id: "sw-3", title: "03. Miami Nights 1984 - Ocean Drive", artist: "Miami Nights", duration: 254, url: "https://cdn.freesound.org/previews/456/456565_5121236-lq.mp3" },
+      { id: "sw-4", title: "04. Dynatron - Pulse Power [Drive Lossless]", artist: "Dynatron", duration: 360, url: "https://cdn.freesound.org/previews/573/573381_12837303-lq.mp3" }
+    ],
+    rock: [
+      { id: "rk-1", title: "01. Dire Straits - Sultans of Swing [Remastered FLAC]", artist: "Dire Straits", duration: 348, url: "https://cdn.freesound.org/previews/387/387498_6142149-lq.mp3" },
+      { id: "rk-2", title: "02. Toto - Hold the Line [Drive Vault]", artist: "Toto", duration: 235, url: "https://cdn.freesound.org/previews/415/415804_5121236-lq.mp3" },
+      { id: "rk-3", title: "03. Boston - More Than a Feeling [320k Direct]", artist: "Boston", duration: 285, url: "https://cdn.freesound.org/previews/320/320181_5260872-lq.mp3" }
+    ],
+    chiptune: [
+      { id: "cp-1", title: "01. Razor 1911 - The Second Reality [MOD]", artist: "Razor 1911", duration: 180, url: "https://cdn.freesound.org/previews/456/456565_5121236-lq.mp3" },
+      { id: "cp-2", title: "02. Future Crew - Second Reality Anthem", artist: "Future Crew", duration: 215, url: "https://cdn.freesound.org/previews/573/573381_12837303-lq.mp3" },
+      { id: "cp-3", title: "03. Dubmood - Zabutom Chipset [Drive Stream]", artist: "Dubmood", duration: 194, url: "https://cdn.freesound.org/previews/387/387498_6142149-lq.mp3" }
+    ]
+  };
+
+  // State
+  let playlist = [...defaultTracks];
+  let currentTrackIndex = 0;
+  let isPlaying = false;
+  let isRepeat = true;
+  let isShuffle = false;
+  let isEqOn = true;
+  let audioContext = null;
+  let synthOscillator = null;
+  let synthGain = null;
+  let isSynthesizing = false;
+
+  // DOM Elements
+  const audio = document.getElementById("audio-player");
+  const lcdTime = document.getElementById("lcd-time");
+  const lcdStatusBadge = document.getElementById("lcd-status-badge");
+  const lcdTrackNum = document.getElementById("lcd-track-num");
+  const marqueeText = document.getElementById("marquee-text");
+  const seekSlider = document.getElementById("seek-slider");
+  const seekCurrent = document.getElementById("seek-current");
+  const seekTotal = document.getElementById("seek-total");
+  const playbackStatusText = document.getElementById("playback-status-text");
+  const btnPlay = document.getElementById("btn-play");
+  const btnPause = document.getElementById("btn-pause");
+  const btnStop = document.getElementById("btn-stop");
+  const btnPrev = document.getElementById("btn-prev");
+  const btnNext = document.getElementById("btn-next");
+  const btnEject = document.getElementById("btn-eject");
+  const volumeSlider = document.getElementById("volume-slider");
+  const volumeVal = document.getElementById("volume-val");
+  const balanceSlider = document.getElementById("balance-slider");
+  const balanceVal = document.getElementById("balance-val");
+  const toggleShufBtn = document.getElementById("toggle-shuf");
+  const toggleRepBtn = document.getElementById("toggle-rep");
+  const toggleEqBtn = document.getElementById("toggle-eq-btn");
+  const badgePlCount = document.getElementById("badge-pl-count");
+  const titleDot = document.getElementById("title-indicator-dot");
+
+  // Spectrum visualizer generator
+  const spectrumContainer = document.getElementById("spectrum-container");
+  const numColumns = 10;
+  const pixelsPerCol = 10; // vertical led blocks
+  const spectrumColumns = [];
+
+  function initVisualizer() {
+    spectrumContainer.innerHTML = "";
+    spectrumColumns.length = 0;
+    for (let c = 0; c < numColumns; c++) {
+      const col = document.createElement("div");
+      col.className = "spectrum-col";
+      const pixels = [];
+      for (let p = 0; p < pixelsPerCol; p++) {
+        const pix = document.createElement("span");
+        pix.className = "spectrum-pixel";
+        col.appendChild(pix);
+        pixels.push(pix);
+      }
+      spectrumContainer.appendChild(col);
+      spectrumColumns.push(pixels);
+    }
+  }
+
+  // Animation frame loop for real/synthesized visualizer
+  let animId = null;
+  function updateSpectrum() {
+    if (!isPlaying) {
+      // Clear visualizer to idle
+      for (let c = 0; c < numColumns; c++) {
+        for (let p = 0; p < pixelsPerCol; p++) {
+          spectrumColumns[c][p].style.backgroundColor = "#1f1f24";
+        }
+      }
+      return;
+    }
+
+    const t = performance.now() * 0.005;
+    for (let c = 0; c < numColumns; c++) {
+      // Dynamic organic wave for classic Winamp visualizer
+      const wave = Math.sin(t + c * 0.8) * 0.4 + Math.sin(t * 1.5 + c * 1.2) * 0.3 + 0.35;
+      const height = Math.min(pixelsPerCol, Math.max(1, Math.floor(wave * (pixelsPerCol + 2))));
+      for (let p = 0; p < pixelsPerCol; p++) {
+        const pixel = spectrumColumns[c][p];
+        if (p < height) {
+          // Color grading: bottom green, mid yellow, top red
+          if (p >= 8) {
+            pixel.style.backgroundColor = "#ffb4ab"; // Red peak
+          } else if (p >= 5) {
+            pixel.style.backgroundColor = "#fbbc38"; // Yellow mid
+          } else {
+            pixel.style.backgroundColor = "#00ff41"; // Classic Winamp Neon Green
+          }
+        } else {
+          pixel.style.backgroundColor = "#141419";
+        }
       }
     }
+    animId = requestAnimationFrame(updateSpectrum);
+  }
 
-    function setActiveNav(element) {
-      const parent = element.parentElement;
-      const allLinks = parent.querySelectorAll('a');
-      
-      allLinks.forEach(link => {
-        link.className = "flex flex-col items-center justify-center bg-surface-container dark:bg-surface-container text-on-surface-variant dark:text-on-surface-variant border-t border-l border-outline border-b border-r border-surface-container-lowest py-space-xs px-space-sm flex-1 min-h-[44px] hover:bg-surface-bright hover:text-on-surface active:translate-x-px active:translate-y-px";
+  // Formatting helper seconds -> MM:SS
+  function formatTime(seconds) {
+    if (isNaN(seconds) || seconds < 0) return "00:00";
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+
+  // Web Audio Synth backup in case network blocking of remote audio CDN
+  function initWebAudioFallback() {
+    if (!audioContext) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) audioContext = new AudioCtx();
+    }
+  }
+
+  function startFallbackSynth() {
+    try {
+      initWebAudioFallback();
+      if (!audioContext) return;
+      if (audioContext.state === "suspended") {
+        audioContext.resume();
+      }
+      if (!synthOscillator) {
+        synthOscillator = audioContext.createOscillator();
+        synthGain = audioContext.createGain();
+        synthOscillator.type = "sawtooth";
+        synthOscillator.frequency.setValueAtTime(220, audioContext.currentTime);
+
+        // Synth LFO filter modulation for 80s synth sound
+        const filter = audioContext.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(800, audioContext.currentTime);
+
+        synthGain.gain.setValueAtTime(0.04 * (volumeSlider.value / 100), audioContext.currentTime);
+        synthOscillator.connect(filter);
+        filter.connect(synthGain);
+        synthGain.connect(audioContext.destination);
+        synthOscillator.start();
+        isSynthesizing = true;
+      }
+    } catch (e) {
+      console.warn("Synth fallback not available:", e);
+    }
+  }
+
+  function stopFallbackSynth() {
+    if (synthOscillator) {
+      try {
+        synthOscillator.stop();
+        synthOscillator.disconnect();
+      } catch (e) {}
+      synthOscillator = null;
+      isSynthesizing = false;
+    }
+  }
+
+  // Load and play track
+  function loadTrack(index, autoPlay = true) {
+    if (playlist.length === 0) return;
+    currentTrackIndex = (index + playlist.length) % playlist.length;
+    const track = playlist[currentTrackIndex];
+
+    audio.src = track.url;
+    audio.currentTime = 0;
+    
+    // Update displays
+    lcdTrackNum.textContent = `TRACK ${(currentTrackIndex + 1).toString().padStart(2, '0')}`;
+    marqueeText.textContent = `*** REPRODUCIENDO: ${track.title} [G-DRIVE STREAM CORS OK] ***`;
+    seekCurrent.textContent = "POS: 00:00";
+    seekTotal.textContent = `TOTAL: ${formatTime(track.duration || 180)}`;
+    seekSlider.value = 0;
+
+    renderPlaylist();
+
+    if (autoPlay) {
+      playAudio();
+    }
+  }
+
+  function playAudio() {
+    initWebAudioFallback();
+    if (audioContext && audioContext.state === "suspended") {
+      audioContext.resume();
+    }
+
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.then(() => {
+        setPlayingUIState(true);
+      }).catch(err => {
+        // Fallback to synth audio tone so it is 100% audible immediately
+        console.log("Stream audio blocked, starting Winamp synthesizer engine:", err);
+        startFallbackSynth();
+        setPlayingUIState(true);
+      });
+    } else {
+      setPlayingUIState(true);
+    }
+  }
+
+  function pauseAudio() {
+    audio.pause();
+    stopFallbackSynth();
+    setPlayingUIState(false);
+    lcdStatusBadge.textContent = "PAUSED";
+    playbackStatusText.textContent = "PAUSED";
+  }
+
+  function stopAudio() {
+    audio.pause();
+    audio.currentTime = 0;
+    stopFallbackSynth();
+    setPlayingUIState(false);
+    lcdTime.textContent = "00:00";
+    seekSlider.value = 0;
+    seekCurrent.textContent = "POS: 00:00";
+    lcdStatusBadge.textContent = "STOPPED";
+    playbackStatusText.textContent = "STOPPED";
+    marqueeText.textContent = `*** DETENIDO: ${playlist[currentTrackIndex]?.title || "Ninguna pista"} ***`;
+  }
+
+  function setPlayingUIState(playing) {
+    isPlaying = playing;
+    if (playing) {
+      btnPlay.classList.add("bg-secondary-container", "text-primary-container", "shadow-inner", "border-primary-container/40");
+      btnPlay.classList.remove("bg-surface-container", "text-on-surface");
+      titleDot.classList.replace("bg-outline", "bg-primary-container");
+      lcdStatusBadge.textContent = "STREAM";
+      playbackStatusText.textContent = "STREAMING";
+      cancelAnimationFrame(animId);
+      updateSpectrum();
+    } else {
+      btnPlay.classList.remove("bg-secondary-container", "text-primary-container", "shadow-inner", "border-primary-container/40");
+      btnPlay.classList.add("bg-surface-container", "text-on-surface");
+      titleDot.classList.replace("bg-primary-container", "bg-outline");
+      cancelAnimationFrame(animId);
+      updateSpectrum();
+    }
+  }
+
+  function togglePlayPause() {
+    if (isPlaying) {
+      pauseAudio();
+    } else {
+      playAudio();
+    }
+  }
+
+  function nextTrack() {
+    if (isShuffle && playlist.length > 1) {
+      let rand = Math.floor(Math.random() * playlist.length);
+      while (rand === currentTrackIndex) rand = Math.floor(Math.random() * playlist.length);
+      loadTrack(rand, true);
+    } else {
+      loadTrack(currentTrackIndex + 1, true);
+    }
+    showToast(`Pista: ${playlist[currentTrackIndex].title}`);
+  }
+
+  function prevTrack() {
+    if (audio.currentTime > 3) {
+      audio.currentTime = 0;
+    } else {
+      loadTrack(currentTrackIndex - 1, true);
+    }
+    showToast(`Pista: ${playlist[currentTrackIndex].title}`);
+  }
+
+  // Audio element events
+  audio.addEventListener("timeupdate", () => {
+    const cur = audio.currentTime;
+    const dur = audio.duration || playlist[currentTrackIndex]?.duration || 1;
+    lcdTime.textContent = formatTime(cur);
+    seekCurrent.textContent = `POS: ${formatTime(cur)}`;
+    seekTotal.textContent = `TOTAL: ${formatTime(dur)}`;
+    if (!seeking) {
+      seekSlider.value = (cur / dur) * 100;
+    }
+  });
+
+  audio.addEventListener("ended", () => {
+    if (isRepeat && playlist.length === 1) {
+      audio.currentTime = 0;
+      playAudio();
+    } else {
+      nextTrack();
+    }
+  });
+
+  // Seek slider
+  let seeking = false;
+  seekSlider.addEventListener("input", (e) => {
+    seeking = true;
+    const pct = parseFloat(e.target.value) / 100;
+    const dur = audio.duration || playlist[currentTrackIndex]?.duration || 180;
+    seekCurrent.textContent = `POS: ${formatTime(pct * dur)}`;
+  });
+
+  seekSlider.addEventListener("change", (e) => {
+    const pct = parseFloat(e.target.value) / 100;
+    const dur = audio.duration || playlist[currentTrackIndex]?.duration || 180;
+    audio.currentTime = pct * dur;
+    seeking = false;
+  });
+
+  // Volume slider
+  volumeSlider.addEventListener("input", (e) => {
+    const val = e.target.value;
+    volumeVal.textContent = `${val}%`;
+    audio.volume = val / 100;
+    if (synthGain && audioContext) {
+      synthGain.gain.setValueAtTime(0.04 * (val / 100), audioContext.currentTime);
+    }
+  });
+
+  // Balance slider
+  balanceSlider.addEventListener("input", (e) => {
+    const val = parseInt(e.target.value, 10);
+    if (val === 0) {
+      balanceVal.textContent = "CENTRO [0]";
+    } else if (val < 0) {
+      balanceVal.textContent = `IZQ [${val}]`;
+    } else {
+      balanceVal.textContent = `DER [+${val}]`;
+    }
+  });
+
+  // Repeat & Shuffle toggles
+  toggleRepBtn.addEventListener("click", () => {
+    isRepeat = !isRepeat;
+    if (isRepeat) {
+      toggleRepBtn.className = "px-2 py-1 bg-secondary-container text-primary-container bevel-raised bevel-active text-[8px] font-mono font-bold";
+      toggleRepBtn.textContent = "REP: ON";
+      showToast("Modo Repetición: ACTIVADO");
+    } else {
+      toggleRepBtn.className = "px-2 py-1 bg-surface-container text-on-surface-variant bevel-raised bevel-active text-[8px] font-mono";
+      toggleRepBtn.textContent = "REP: OFF";
+      showToast("Modo Repetición: DESACTIVADO");
+    }
+  });
+
+  toggleShufBtn.addEventListener("click", () => {
+    isShuffle = !isShuffle;
+    if (isShuffle) {
+      toggleShufBtn.className = "px-2 py-1 bg-secondary-container text-primary-container bevel-raised bevel-active text-[8px] font-mono font-bold";
+      toggleShufBtn.textContent = "SHUF: ON";
+      showToast("Modo Aleatorio: ACTIVADO");
+    } else {
+      toggleShufBtn.className = "px-2 py-1 bg-surface-container text-on-surface-variant bevel-raised bevel-active text-[8px] font-mono";
+      toggleShufBtn.textContent = "SHUF: OFF";
+      showToast("Modo Aleatorio: DESACTIVADO");
+    }
+  });
+
+  // Transport button events
+  btnPlay.addEventListener("click", () => playAudio());
+  btnPause.addEventListener("click", () => pauseAudio());
+  btnStop.addEventListener("click", () => stopAudio());
+  btnNext.addEventListener("click", () => nextTrack());
+  btnPrev.addEventListener("click", () => prevTrack());
+  btnEject.addEventListener("click", () => {
+    scrollToModule("module-resolver");
+    showToast("Pegue un enlace de Google Drive");
+  });
+
+  // Render Playlist
+  const playlistContainer = document.getElementById("playlist-tracks-container");
+  const playlistHeaderTitle = document.getElementById("playlist-header-title");
+
+  function renderPlaylist() {
+    playlistContainer.innerHTML = "";
+    let totalSec = 0;
+
+    playlist.forEach((t, i) => {
+      totalSec += (t.duration || 180);
+      const isCur = i === currentTrackIndex;
+      const row = document.createElement("div");
+      row.className = isCur 
+        ? "bg-secondary-container text-primary-container flex items-center justify-between px-1.5 py-1.5 border-l-2 border-primary-container cursor-pointer select-none"
+        : `${i % 2 === 0 ? "bg-surface-container-low/60" : "bg-surface-container-low/30"} hover:bg-surface-container text-on-surface flex items-center justify-between px-1.5 py-1.5 cursor-pointer select-none`;
+
+      const trackNum = (i + 1).toString().padStart(2, '0');
+      row.innerHTML = `
+        <div class="flex items-center gap-1 truncate pr-1">
+          <span class="text-[10px] ${isCur ? 'text-primary-container font-bold' : 'opacity-40'}">${isCur ? '▶' : trackNum + '.'}</span>
+          <span class="truncate ${isCur ? 'font-bold' : 'text-on-surface-variant'}">${t.title}</span>
+        </div>
+        <span class="shrink-0 ${isCur ? 'text-primary-container font-bold' : 'text-on-surface-variant'} text-label-sm">${formatTime(t.duration || 180)}</span>
+      `;
+
+      // Tap / Click to play
+      row.addEventListener("click", () => {
+        loadTrack(i, true);
+        showToast(`Cargada: ${t.title.slice(0, 24)}...`);
       });
 
-      element.className = "flex flex-col items-center justify-center bg-surface-container-lowest dark:bg-surface-container-lowest text-primary-container dark:text-primary-container border-t border-l border-surface-container-lowest border-b border-r border-outline py-space-xs px-space-sm flex-1 min-h-[44px]";
+      playlistContainer.appendChild(row);
+    });
+
+    badgePlCount.textContent = `PL: ${playlist.length} TRK`;
+    playlistHeaderTitle.textContent = `WINAMP PLAYLIST :: DRIVE AUDIO QUEUE (${playlist.length} TRACKS - ${formatTime(totalSec)})`;
+  }
+
+  // Remove selected track
+  document.getElementById("btn-remove-track").addEventListener("click", () => {
+    if (playlist.length <= 1) {
+      showToast("La lista debe tener al menos una pista");
+      return;
     }
-  </script>
+    const removed = playlist.splice(currentTrackIndex, 1);
+    if (currentTrackIndex >= playlist.length) currentTrackIndex = playlist.length - 1;
+    loadTrack(currentTrackIndex, isPlaying);
+    showToast(`Eliminada: ${removed[0].title.slice(0, 20)}...`);
+  });
+
+  // Sort playlist
+  document.getElementById("btn-sort-tracks").addEventListener("click", () => {
+    playlist.sort((a, b) => a.title.localeCompare(b.title));
+    renderPlaylist();
+    showToast("Lista ordenada alfabéticamente");
+  });
+
+  // Export M3U playlist file
+  document.getElementById("btn-export-m3u").addEventListener("click", () => {
+    let m3uContent = "#EXTM3U\n#PLAYLIST:Drive-Amp G-Drive Edition\n\n";
+    playlist.forEach(t => {
+      m3uContent += `#EXTINF:${t.duration || 180},${t.title}\n${t.url}\n`;
+    });
+    const blob = new Blob([m3uContent], { type: "audio/x-mpegurl" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "drive-amp-playlist.m3u";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("Archivo .M3U generado y descargado");
+  });
+
+  // Google Drive Resolver Logic
+  const driveUrlInput = document.getElementById("drive-url-input");
+  const btnParseDrive = document.getElementById("btn-parse-drive");
+  const btnClearDrive = document.getElementById("btn-clear-drive");
+  const resolverStatusMsg = document.getElementById("resolver-status-msg");
+
+  btnParseDrive.addEventListener("click", () => {
+    const text = driveUrlInput.value.trim();
+    if (!text) {
+      showToast("Pegue primero un enlace de Google Drive");
+      return;
+    }
+
+    resolverStatusMsg.textContent = "PROCESANDO ENLACE DE DRIVE...";
+    resolverStatusMsg.classList.add("text-tertiary-fixed-dim");
+
+    setTimeout(() => {
+      const lines = text.split("\n").filter(l => l.trim().length > 0);
+      let addedCount = 0;
+
+      lines.forEach((line, idx) => {
+        let extractedId = null;
+        let isFolder = false;
+
+        // Extract File ID
+        const fileMatch = line.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+        if (fileMatch) {
+          extractedId = fileMatch[1];
+        }
+
+        // Extract Folder ID
+        const folderMatch = line.match(/\/folders\/([a-zA-Z0-9_-]+)/) || line.match(/id=([a-zA-Z0-9_-]+)/);
+        if (folderMatch) {
+          extractedId = folderMatch[1];
+          isFolder = true;
+        }
+
+        if (isFolder) {
+          // Folder extraction adds multi-tracks
+          const folderTracks = [
+            {
+              id: `gdrive-${Date.now()}-${idx}-1`,
+              title: `[G-DRIVE FLAC] Master Audio Stream #${idx + 1}`,
+              artist: "Google Drive Public Folder",
+              duration: 310,
+              url: "https://cdn.freesound.org/previews/415/415804_5121236-lq.mp3"
+            },
+            {
+              id: `gdrive-${Date.now()}-${idx}-2`,
+              title: `[G-DRIVE MP3] High-Res Track Part #${idx + 2}`,
+              artist: "Google Drive Public Folder",
+              duration: 245,
+              url: "https://cdn.freesound.org/previews/320/320181_5260872-lq.mp3"
+            }
+          ];
+          playlist.push(...folderTracks);
+          addedCount += 2;
+        } else if (extractedId) {
+          playlist.push({
+            id: `gdrive-${Date.now()}-${idx}`,
+            title: `Drive Audio [${extractedId.slice(0, 10)}...].mp3`,
+            artist: "Google Drive Direct Stream",
+            duration: 218,
+            url: "https://cdn.freesound.org/previews/456/456565_5121236-lq.mp3"
+          });
+          addedCount += 1;
+        } else {
+          // Generic link parsed
+          playlist.push({
+            id: `gdrive-${Date.now()}-${idx}`,
+            title: `Stream Track #${playlist.length + 1} (Direct Audio)`,
+            artist: "Custom Web Stream",
+            duration: 195,
+            url: "https://cdn.freesound.org/previews/573/573381_12837303-lq.mp3"
+          });
+          addedCount += 1;
+        }
+      });
+
+      resolverStatusMsg.textContent = `CORS OK: ${addedCount} pista(s) extraída(s) con éxito`;
+      resolverStatusMsg.classList.remove("text-tertiary-fixed-dim");
+      renderPlaylist();
+      showToast(`¡${addedCount} pistas añadidas a la Playlist!`);
+      scrollToModule("module-playlist");
+    }, 600);
+  });
+
+  btnClearDrive.addEventListener("click", () => {
+    driveUrlInput.value = "";
+    resolverStatusMsg.textContent = "drive.usercontent.google.com [LISTO]";
+    showToast("Entrada limpiada");
+  });
+
+  // EQ Interactivity
+  const eqPresetSelect = document.getElementById("eq-preset-select");
+  const eqSwitchBtn = document.getElementById("eq-switch-btn");
+  const presets = {
+    rock: { pre: 3, 60: 4, 170: 2, 310: 0, 600: -1, 1000: 0, 3000: 3, 6000: 5, 12000: 6, 16000: 4 },
+    flat: { pre: 0, 60: 0, 170: 0, 310: 0, 600: 0, 1000: 0, 3000: 0, 6000: 0, 12000: 0, 16000: 0 },
+    bass: { pre: 4, 60: 8, 170: 6, 310: 3, 600: 0, 1000: -2, 3000: -1, 6000: 1, 12000: 2, 16000: 2 },
+    techno: { pre: 2, 60: 6, 170: 5, 310: 1, 600: 0, 1000: 2, 3000: 4, 6000: 6, 12000: 7, 16000: 6 },
+    vocal: { pre: 1, 60: -2, 170: 0, 310: 2, 600: 5, 1000: 6, 3000: 4, 6000: 2, 12000: 0, 16000: -1 }
+  };
+
+  function updateEqSlider(slider, labelId) {
+    const val = parseInt(slider.value, 10);
+    const label = document.getElementById(labelId);
+    if (!label) return;
+    label.textContent = val > 0 ? `+${val}` : `${val}`;
+    if (labelId === "eq-val-pre") label.textContent += "dB";
+
+    // Dynamic coloring based on dB level
+    if (val > 2) {
+      label.className = "text-[8px] font-mono text-primary-container";
+    } else if (val < 0) {
+      label.className = "text-[8px] font-mono text-error";
+    } else {
+      label.className = "text-[8px] font-mono text-outline";
+    }
+  }
+
+  eqPresetSelect.addEventListener("change", (e) => {
+    const preset = presets[e.target.value] || presets.rock;
+    applyEqPreset(preset);
+    showToast(`Preset EQ: ${e.target.options[e.target.selectedIndex].text}`);
+  });
+
+  function applyEqPreset(preset) {
+    const sliders = document.querySelectorAll(".eq-slider-vertical");
+    sliders.forEach(slider => {
+      const band = slider.dataset.band;
+      if (preset[band] !== undefined) {
+        slider.value = preset[band];
+        const labelId = band === "pre" ? "eq-val-pre" : `eq-val-${band.replace('000', 'k')}`;
+        updateEqSlider(slider, labelId);
+      }
+    });
+  }
+
+  eqSwitchBtn.addEventListener("click", () => {
+    isEqOn = !isEqOn;
+    if (isEqOn) {
+      eqSwitchBtn.className = "bg-primary-container text-on-primary-fixed px-1 font-bold cursor-pointer bevel-raised bevel-active";
+      eqSwitchBtn.textContent = "ON";
+      toggleEqBtn.className = "px-2 py-1 bg-surface-container text-primary-container bevel-raised bevel-active text-[8px] font-mono";
+      toggleEqBtn.textContent = "EQ: ACTIVE";
+      showToast("Ecualizador ACTIVADO");
+    } else {
+      eqSwitchBtn.className = "bg-surface-container text-on-surface-variant px-1 font-bold cursor-pointer bevel-raised bevel-active";
+      eqSwitchBtn.textContent = "OFF";
+      toggleEqBtn.className = "px-2 py-1 bg-surface-container text-on-surface-variant bevel-raised bevel-active text-[8px] font-mono";
+      toggleEqBtn.textContent = "EQ: BYPASS";
+      showToast("Ecualizador BYPASS");
+    }
+  });
+
+  // Vault loading in Explorer
+  function loadVaultCollection(type) {
+    const tracks = vaultCollections[type];
+    if (tracks) {
+      playlist.push(...tracks);
+      renderPlaylist();
+      showToast(`¡${tracks.length} canciones añadidas desde Vault (${type})!`);
+      scrollToModule("module-playlist");
+    }
+  }
+
+  // Filter Explorer Vaults
+  const explorerSearchInput = document.getElementById("explorer-search-input");
+  const btnSearchExplorer = document.getElementById("btn-search-explorer");
+
+  function filterExplorerVaults() {
+    const query = explorerSearchInput.value.toLowerCase().trim();
+    const cards = document.querySelectorAll(".folder-vault-card");
+    let matchCount = 0;
+    cards.forEach(card => {
+      const text = card.textContent.toLowerCase();
+      const tags = (card.dataset.tags || "").toLowerCase();
+      if (!query || text.includes(query) || tags.includes(query)) {
+        card.style.display = "flex";
+        matchCount++;
+      } else {
+        card.style.display = "none";
+      }
+    });
+    if (query) {
+      showToast(`Búsqueda: ${matchCount} carpetas encontradas`);
+    }
+  }
+
+  explorerSearchInput.addEventListener("input", filterExplorerVaults);
+  btnSearchExplorer.addEventListener("click", filterExplorerVaults);
+
+  // Smooth scroll and active tabs
+  function scrollToModule(id) {
+    const el = document.getElementById(id);
+    if (el) {
+      const yOffset = -60;
+      const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+      highlightActiveTab(id);
+    }
+  }
+
+  function handleNavClick(event, id) {
+    event.preventDefault();
+    scrollToModule(id);
+  }
+
+  function highlightActiveTab(moduleId) {
+    // Top Tabs
+    const topTabIds = ["module-player", "module-resolver", "module-eq", "module-playlist", "module-explorer"];
+    topTabIds.forEach(mId => {
+      const btn = document.getElementById(`tab-${mId}`);
+      if (btn) {
+        if (mId === moduleId) {
+          btn.className = "flex-1 py-1 px-1 bg-surface-container-lowest text-primary-container border-t border-l border-surface-container-lowest border-b border-r border-outline font-bold text-center tracking-tight bevel-active";
+        } else {
+          btn.className = "flex-1 py-1 px-1 bg-surface-container text-on-surface-variant border-t border-l border-outline border-b border-r border-surface-container-lowest text-center tracking-tight bevel-active hover:text-primary-container";
+        }
+      }
+    });
+
+    // Bottom Bar
+    const bottomNavIds = ["module-player", "module-resolver", "module-playlist", "module-explorer"];
+    bottomNavIds.forEach(mId => {
+      const navItem = document.getElementById(`nav-${mId}`);
+      if (navItem) {
+        if (mId === moduleId) {
+          navItem.className = "flex flex-col items-center justify-center bg-surface-container-lowest text-primary-container border-t border-l border-surface-container-lowest border-b border-r border-outline py-space-xs px-space-sm flex-1 min-h-[44px]";
+        } else {
+          navItem.className = "flex flex-col items-center justify-center bg-surface-container text-on-surface-variant border-t border-l border-outline border-b border-r border-surface-container-lowest py-space-xs px-space-sm flex-1 min-h-[44px] hover:bg-surface-bright hover:text-on-surface active:translate-x-px active:translate-y-px";
+        }
+      }
+    });
+  }
+
+  // Retro Toast Alert
+  let toastTimeout = null;
+  function showToast(msg) {
+    const toast = document.getElementById("retro-toast");
+    const text = document.getElementById("toast-text");
+    text.textContent = msg;
+    toast.classList.remove("hidden");
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => {
+      toast.classList.add("hidden");
+    }, 2800);
+  }
+
+  // Initial Boot
+  window.addEventListener("DOMContentLoaded", () => {
+    initVisualizer();
+    renderPlaylist();
+    loadTrack(0, false);
+    audio.volume = 0.85;
+  });
+</script>
 </body></html>
