@@ -1,895 +1,217 @@
-<!DOCTYPE html>
-
-<html lang="es"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1" name="viewport"/>
-<title>Drive-Amp — Vercel Serverless Edition</title>
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drive-Amp (Winamp Google Drive)</title>
 <style>
   :root {
-    --chrome: #2b3140;
-    --light: #6d7690;
-    --dark: #0d1017;
-    --green: #00e000;
-    --dim: #0a5a0a;
-    --orange: #ff9d00;
-    --cyan: #38bdf8;
+    --chrome: #2b3140; --light: #6d7690; --dark: #0d1017;
+    --green: #00e000; --dim: #0a5a0a; --orange: #ff9d00; --cyan: #00e5ff;
     --mono: "VT323", "Lucida Console", "Courier New", monospace;
     --ui: "Tahoma", "Verdana", sans-serif;
   }
   * { box-sizing: border-box; }
   body {
-    margin: 0;
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    padding: 16px 10px;
-    font-family: var(--ui);
-    color: #c9d1d9;
+    margin: 0; min-height: 100vh; display: flex; justify-content: center; align-items: flex-start;
+    padding: 24px 12px; font-family: var(--ui); color: #c9d1d9;
     background: radial-gradient(ellipse at 50% 0%, #1a2238 0%, #0b0d12 65%);
   }
-  .stack {
-    width: 100%;
-    max-width: 480px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
+  .stack { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 8px; }
   .win {
-    background: var(--chrome);
-    border: 1px solid var(--light);
-    border-right-color: var(--dark);
-    border-bottom-color: var(--dark);
+    background: var(--chrome); border: 1px solid var(--light);
+    border-right-color: var(--dark); border-bottom-color: var(--dark);
     box-shadow: 0 0 0 1px #000, 4px 4px 0 #000;
   }
   .title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 3px 6px;
-    user-select: none;
-    background: linear-gradient(180deg, #3c5a96, #1d2c52);
-    border-bottom: 1px solid #000;
-    font-size: 10px;
-    letter-spacing: .1em;
-    color: #e6ecff;
-    white-space: nowrap;
-    font-weight: bold;
+    display: flex; align-items: center; gap: 8px; padding: 2px 6px; user-select: none;
+    background: linear-gradient(180deg, #3c5a96, #1d2c52); border-bottom: 1px solid #000;
+    font-size: 10px; letter-spacing: .1em; color: #e6ecff; white-space: nowrap; cursor: pointer;
   }
-  .title.drive-title {
-    background: linear-gradient(180deg, #1b5e20, #0d3813);
-    cursor: pointer;
+  .title.green { background: linear-gradient(180deg, #1b5e20, #0d3311); color: #c8e6c9; }
+  .title .btn-min {
+    margin-left: auto; width: 14px; height: 12px; line-height: 10px; font-size: 10px;
+    padding: 0; text-align: center; border: 1px solid #7f8aa0; background: #2b3140; color: #fff; cursor: pointer;
   }
-  .title.search-title {
-    background: linear-gradient(180deg, #2b4570, #14223b);
-    cursor: pointer;
-  }
-  .title.config-title {
-    background: linear-gradient(180deg, #5c3b1e, #311c09);
-    cursor: pointer;
-  }
-  .grip {
-    flex: 1;
-    height: 6px;
-    opacity: .7;
-    background: repeating-linear-gradient(180deg, var(--light) 0 1px, #000 1px 2px);
-  }
-  .win-btn {
-    width: 12px;
-    height: 12px;
-    font-size: 9px;
-    line-height: 10px;
-    padding: 0;
-    text-align: center;
-    background: #353c4e;
-    border: 1px solid var(--light);
-    border-right-color: #000;
-    border-bottom-color: #000;
-    color: #fff;
-    cursor: pointer;
-  }
-  .win-btn.close { background: #8a2020; }
-  .body {
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
+  .grip { flex: 1; height: 6px; opacity: .7;
+    background: repeating-linear-gradient(180deg, var(--light) 0 1px, #000 1px 2px); }
+  .body { padding: 8px; display: flex; flex-direction: column; gap: 8px; }
   .lcd {
-    background: #000;
-    border: 1px solid var(--dark);
-    border-right-color: var(--light);
-    border-bottom-color: var(--light);
-    padding: 8px;
-    font-family: var(--mono);
-    color: var(--green);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+    background: #000; border: 1px solid var(--dark); border-right-color: var(--light); border-bottom-color: var(--light);
+    padding: 8px; font-family: var(--mono); color: var(--green); display: flex; flex-direction: column; gap: 6px;
   }
-  .top {
-    display: flex;
-    gap: 12px;
-    align-items: stretch;
-  }
-  .timebox {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 120px;
-  }
-  .state {
-    font-size: 16px;
-    width: 18px;
-    text-align: center;
-  }
-  .time {
-    font-size: 44px;
-    line-height: 1;
-    letter-spacing: .04em;
-    text-shadow: 0 0 6px rgba(0, 224, 0, .55);
-  }
-  canvas {
-    flex: 1;
-    min-width: 0;
-    height: 44px;
-    width: 100%;
-    background: #000;
-  }
-  .marq {
-    overflow: hidden;
-    white-space: nowrap;
-    background: #021002;
-    border: 1px solid #052b05;
-    padding: 2px 4px;
-  }
-  .marq span {
-    display: inline-block;
-    font-size: 19px;
-    line-height: 1.1;
-  }
-  .marq span.scroll {
-    padding-left: 100%;
-    animation: sc 14s linear infinite;
-  }
-  @keyframes sc {
-    to { transform: translateX(-100%); }
-  }
-  .info {
-    display: flex;
-    justify-content: space-between;
-    font-size: 14px;
-    color: var(--dim);
-    filter: brightness(1.8);
-    font-family: var(--mono);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+  .top { display: flex; gap: 12px; align-items: stretch; }
+  .timebox { display: flex; align-items: center; gap: 6px; min-width: 120px; }
+  .state { font-size: 16px; width: 18px; text-align: center; }
+  .time { font-size: 44px; line-height: 1; letter-spacing: .04em; text-shadow: 0 0 6px rgba(0,224,0,.55); }
+  canvas { flex: 1; min-width: 0; height: 44px; width: 100%; background: #000; }
+  .marq { overflow: hidden; white-space: nowrap; background: #021002; border: 1px solid #052b05; padding: 1px 4px; }
+  .marq span { display: inline-block; font-size: 19px; line-height: 1.2; }
+  .marq span.scroll { padding-left: 100%; animation: sc 14s linear infinite; }
+  @keyframes sc { to { transform: translateX(-100%); } }
+  .info { display: flex; justify-content: space-between; font-size: 15px; color: var(--dim); filter: brightness(1.8); font-family: var(--mono); }
   input[type=range] {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 12px;
-    margin: 0;
-    cursor: pointer;
-    background: #000;
-    border: 1px solid var(--dark);
-    border-right-color: var(--light);
-    border-bottom-color: var(--light);
+    -webkit-appearance: none; appearance: none; width: 100%; height: 12px; margin: 0; cursor: pointer;
+    background: #000; border: 1px solid var(--dark); border-right-color: var(--light); border-bottom-color: var(--light);
   }
   input[type=range]:disabled { opacity: .5; cursor: default; }
   input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 18px;
-    height: 12px;
-    border-radius: 0;
-    background: linear-gradient(180deg, #8d97b3, #4a5268);
-    border: 1px solid var(--light);
-    border-right-color: #000;
-    border-bottom-color: #000;
+    -webkit-appearance: none; width: 18px; height: 12px; border-radius: 0;
+    background: linear-gradient(180deg, #8d97b3, #4a5268); border: 1px solid var(--light); border-right-color: #000; border-bottom-color: #000;
   }
   input[type=range]::-moz-range-thumb {
-    width: 16px;
-    height: 10px;
-    border-radius: 0;
-    background: linear-gradient(180deg, #8d97b3, #4a5268);
-    border: 1px solid var(--light);
-    border-right-color: #000;
-    border-bottom-color: #000;
+    width: 16px; height: 10px; border-radius: 0;
+    background: linear-gradient(180deg, #8d97b3, #4a5268); border: 1px solid var(--light); border-right-color: #000; border-bottom-color: #000;
   }
-  .row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-  .tr {
-    display: flex;
-    gap: 3px;
-    align-items: center;
-    flex-wrap: wrap;
-  }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .tr { display: flex; gap: 2px; }
   button {
-    font-family: var(--ui);
-    color: #d6dcf0;
-    cursor: pointer;
-    border-radius: 0;
+    font-family: var(--ui); color: #d6dcf0; cursor: pointer; border-radius: 0;
     background: linear-gradient(180deg, #4a5268, #353c4e);
-    border: 1px solid var(--light);
-    border-right-color: #000;
-    border-bottom-color: #000;
-    user-select: none;
+    border: 1px solid var(--light); border-right-color: #000; border-bottom-color: #000;
   }
-  button:hover:not(:disabled) {
-    background: linear-gradient(180deg, #58617a, #3f475b);
-  }
+  button:hover:not(:disabled) { background: linear-gradient(180deg, #58617a, #3f475b); }
   button:active:not(:disabled), button.on {
-    background: #2a3040;
-    border-color: #000;
-    border-right-color: var(--light);
-    border-bottom-color: var(--light);
-    color: var(--green);
+    background: #2a3040; border-color: #000; border-right-color: var(--light); border-bottom-color: var(--light); color: var(--green);
   }
+  button.drive-btn { color: #80e27e; font-weight: bold; }
+  button.drive-btn.on { background: #1b5e20; color: #fff; }
   button:disabled { opacity: .45; cursor: default; }
   button:focus-visible { outline: 1px solid var(--green); outline-offset: 1px; }
-  
-  .tb {
-    width: 34px;
-    height: 24px;
-    font-size: 12px;
+  .tb { width: 34px; height: 24px; font-size: 12px; }
+  .pill { height: 20px; padding: 0 6px; font-size: 9px; letter-spacing: .05em; }
+  .wide { height: 22px; padding: 0 8px; font-size: 10px; white-space: nowrap; }
+  .vol { display: flex; align-items: center; gap: 6px; font-size: 9px; color: #7f8aa0; }
+  .vol span { min-width: 26px; }
+
+  /* Google Drive Drawer */
+  .drive-drawer { display: flex; flex-direction: column; gap: 6px; }
+  .drive-drawer.collapsed { display: none; }
+  .drive-input {
+    width: 100%; height: 60px; background: #000; border: 1px solid var(--dark);
+    border-right-color: var(--light); border-bottom-color: var(--light);
+    color: var(--green); font-family: var(--mono); font-size: 14px; padding: 6px; resize: vertical;
   }
-  .pill {
-    height: 20px;
-    padding: 0 6px;
-    font-size: 9px;
-    letter-spacing: .05em;
-    font-weight: bold;
-  }
-  .drive-toggle-btn {
-    height: 20px;
-    padding: 0 7px;
-    font-size: 9px;
-    letter-spacing: .05em;
-    font-weight: bold;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: linear-gradient(180deg, #374256, #242c3d);
-    border: 1px solid var(--light);
-    border-right-color: #000;
-    border-bottom-color: #000;
-    color: #e2e8f0;
-  }
-  .drive-toggle-btn.open {
-    background: #1c2b1e;
-    border-color: #000;
-    border-right-color: var(--green);
-    border-bottom-color: var(--green);
-    color: var(--green);
-  }
-  .drive-search-btn {
-    height: 20px;
-    padding: 0 7px;
-    font-size: 9px;
-    letter-spacing: .05em;
-    font-weight: bold;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: linear-gradient(180deg, #374256, #242c3d);
-    border: 1px solid var(--light);
-    border-right-color: #000;
-    border-bottom-color: #000;
-    color: #e2e8f0;
-  }
-  .drive-search-btn.open {
-    background: #19273c;
-    border-color: #000;
-    border-right-color: #72a9ff;
-    border-bottom-color: #72a9ff;
-    color: #8bbaff;
-  }
-  .cfg-btn {
-    height: 18px;
-    padding: 0 6px;
-    font-size: 9px;
-    letter-spacing: .05em;
-    font-weight: bold;
-    background: linear-gradient(180deg, #533e2d, #322216);
-    border: 1px solid #947151;
-    border-right-color: #000;
-    border-bottom-color: #000;
-    color: #ffd8a8;
-  }
-  .cfg-btn.open {
-    background: #3a2211;
-    border-color: #000;
-    border-right-color: #ffaa55;
-    border-bottom-color: #ffaa55;
-    color: #ffaa55;
-  }
-  .badge-vercel {
-    font-family: var(--mono);
-    font-size: 9px;
-    padding: 1px 4px;
-    border: 1px solid #00e000;
-    color: #00e000;
-    background: #041f0a;
-    letter-spacing: 0;
-  }
-  .badge-vercel.warn {
-    border-color: #ff9d00;
-    color: #ff9d00;
-    background: #241400;
-  }
-  .check-mark {
-    color: var(--green);
-    font-weight: 900;
-    text-shadow: 0 0 4px var(--green);
-  }
-  .search-mark {
-    color: #72a9ff;
-    font-size: 10px;
-  }
-  .wide {
-    height: 22px;
-    padding: 0 8px;
-    font-size: 10px;
-    white-space: nowrap;
-  }
-  .sm-tag-btn {
-    height: 18px;
-    padding: 0 6px;
-    font-size: 9px;
-    background: #1a2233;
-    border: 1px solid #3d4a63;
-    border-right-color: #000;
-    border-bottom-color: #000;
-    color: #8bbaff;
-    font-family: var(--mono);
-  }
-  .sm-tag-btn:hover {
-    background: #27344e;
-    color: #fff;
-  }
-  .vol {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 9px;
-    color: #7f8aa0;
-  }
-  .vol span { min-width: 30px; }
-  
-  #driveWin, #searchWin, #configWin {
-    transition: all 0.2s ease;
-  }
-  #driveWin.collapsed, #searchWin.collapsed, #configWin.collapsed {
-    display: none;
-  }
-  .drive-input-box {
-    width: 100%;
-    min-height: 58px;
-    background: #000;
-    border: 1px solid var(--dark);
-    border-right-color: var(--light);
-    border-bottom-color: var(--light);
-    color: var(--green);
-    font-family: var(--mono);
-    font-size: 13px;
-    padding: 6px;
-    resize: vertical;
-    outline: none;
-  }
-  .drive-input-box::placeholder {
-    color: #0d4a0d;
-  }
-  .drive-search-input, .cfg-input {
-    flex: 1;
-    min-width: 0;
-    height: 24px;
-    background: #000;
-    border: 1px solid var(--dark);
-    border-right-color: var(--light);
-    border-bottom-color: var(--light);
-    color: var(--green);
-    font-family: var(--mono);
-    font-size: 12px;
-    padding: 2px 6px;
-    outline: none;
-  }
-  .cfg-select {
-    height: 24px;
-    background: #0d121c;
-    border: 1px solid var(--dark);
-    border-right-color: var(--light);
-    border-bottom-color: var(--light);
-    color: #e2e8f0;
-    font-family: var(--mono);
-    font-size: 11px;
-    padding: 2px 4px;
-    outline: none;
-  }
-  .drive-search-input::placeholder, .cfg-input::placeholder {
-    color: #0d4a0d;
-  }
-  .drive-status {
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--orange);
-    padding: 0 2px;
-    min-height: 18px;
-    line-height: 1.2;
-  }
-  .drive-bar {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-  .btn-accent {
-    background: linear-gradient(180deg, #1b5e20, #0e3b12);
-    border: 1px solid #34a853;
-    border-right-color: #000;
-    border-bottom-color: #000;
-    color: #d1fae5;
-    font-weight: bold;
-  }
-  .btn-accent:hover:not(:disabled) {
-    background: linear-gradient(180deg, #24752b, #124917);
-    color: #fff;
-  }
-  .btn-search {
-    background: linear-gradient(180deg, #274574, #152745);
-    border: 1px solid #4a75ba;
-    border-right-color: #000;
-    border-bottom-color: #000;
-    color: #d8e5ff;
-    font-weight: bold;
-    height: 24px;
-    padding: 0 10px;
-    font-family: var(--mono);
-    font-size: 12px;
-  }
-  .btn-search:hover:not(:disabled) {
-    background: linear-gradient(180deg, #375d9e, #1d355d);
-    color: #fff;
-  }
-  .btn-cfg-test {
-    background: linear-gradient(180deg, #644420, #382510);
-    border: 1px solid #b37e40;
-    border-right-color: #000;
-    border-bottom-color: #000;
-    color: #ffeed6;
-    font-weight: bold;
-    height: 24px;
-    padding: 0 8px;
-    font-family: var(--mono);
-    font-size: 11px;
-  }
-  
-  .search-results-box {
-    max-height: 180px;
-    overflow-y: auto;
-    background: #000;
-    border: 1px solid var(--dark);
-    border-right-color: var(--light);
-    border-bottom-color: var(--light);
-    padding: 2px;
-    list-style: none;
-    margin: 0;
-    font-family: var(--mono);
-    scrollbar-color: #4a5268 #0b0d12;
-    scrollbar-width: thin;
-  }
-  .search-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-    padding: 4px 6px;
-    border-bottom: 1px solid #141a24;
-    color: #c0d4ed;
-    font-size: 13px;
-  }
-  .search-item:hover {
-    background: #0d1e38;
-  }
-  .search-item-info {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-  }
-  .search-item-title {
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    color: var(--green);
-    font-size: 13px;
-    font-weight: bold;
-  }
-  .search-item-sub {
-    font-size: 11px;
-    color: #7f95b3;
-    display: flex;
-    gap: 6px;
-    align-items: center;
-  }
-  .btn-add-result {
-    height: 20px;
-    padding: 0 6px;
-    font-size: 10px;
-    font-family: var(--mono);
-    background: linear-gradient(180deg, #1b5e20, #0e3b12);
-    border: 1px solid #34a853;
-    border-right-color: #000;
-    border-bottom-color: #000;
-    color: #d1fae5;
-    white-space: nowrap;
-  }
-  .btn-open-drive {
-    height: 20px;
-    padding: 0 5px;
-    font-size: 10px;
-    font-family: var(--mono);
-    background: #142033;
-    border: 1px solid #324e75;
-    border-right-color: #000;
-    border-bottom-color: #000;
-    color: #90c2ff;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-  }
-  .btn-open-drive:hover {
-    background: #1d3356;
-    color: #fff;
-  }
-  
+  .drive-actions { display: flex; gap: 6px; align-items: center; }
+  .status-badge { font-family: var(--mono); font-size: 13px; color: var(--orange); }
+
+  /* Playlist */
   ol {
-    list-style: none;
-    margin: 0;
-    padding: 2px;
-    height: 220px;
-    overflow-y: auto;
-    background: #000;
-    border: 1px solid var(--dark);
-    border-right-color: var(--light);
-    border-bottom-color: var(--light);
-    font-family: var(--mono);
-    scrollbar-color: #4a5268 #0b0d12;
-    scrollbar-width: thin;
+    list-style: none; margin: 0; padding: 2px; height: 260px; overflow-y: auto; background: #000;
+    border: 1px solid var(--dark); border-right-color: var(--light); border-bottom-color: var(--light);
+    font-family: var(--mono); scrollbar-color: #4a5268 #0b0d12; scrollbar-width: thin;
   }
-  li.empty {
-    padding: 24px 16px;
-    text-align: center;
-    color: var(--dim);
-    filter: brightness(1.8);
-    font-size: 17px;
-  }
-  li.t {
-    display: flex;
-    align-items: center;
-    color: var(--green);
-  }
+  li.empty { padding: 16px; text-align: center; color: var(--dim); filter: brightness(1.8); font-size: 17px; }
+  li.t { display: flex; align-items: center; color: var(--green); }
   li.t:hover { background: #0a2a0a; }
   li.t.act { background: #0b3a7a; color: #fff; }
   li.t .m {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    gap: 6px;
-    padding: 0 4px;
-    text-align: left;
-    background: transparent;
-    border: 0;
-    color: inherit;
-    font-family: var(--mono);
-    font-size: 15px;
-    line-height: 1.25;
+    flex: 1; min-width: 0; display: flex; gap: 6px; padding: 0 4px; text-align: left;
+    background: transparent; border: 0; color: inherit; font-family: var(--mono); font-size: 17px; line-height: 1.25;
   }
   li.t .m:hover { background: transparent; }
-  .m .n { min-width: 24px; text-align: right; }
+  .m .n { min-width: 26px; text-align: right; }
   .m .tt { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .m .tag {
-    font-size: 11px;
-    padding: 0px 3px;
-    background: #0f3d1b;
-    color: #4ade80;
-    border: 1px solid #166534;
-    border-radius: 2px;
-    margin-right: 2px;
-  }
+  .m .tag { font-size: 12px; color: var(--cyan); padding-right: 4px; }
   .m .d { min-width: 44px; text-align: right; }
-  li.t .x {
-    width: 18px;
-    height: 18px;
-    padding: 0;
-    background: transparent;
-    border: 0;
-    color: var(--dim);
-    filter: brightness(1.8);
-    opacity: 0;
-    font-size: 11px;
-  }
+  li.t .x { width: 18px; height: 18px; padding: 0; background: transparent; border: 0; color: var(--dim); filter: brightness(1.8); opacity: 0; font-size: 11px; }
   li.t:hover .x, li.t .x:focus-visible { opacity: 1; }
   li.t .x:hover { color: #ff4a3d; }
-  .foot {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    padding: 4px 8px 8px;
-    flex-wrap: wrap;
-  }
-  .total {
-    margin-left: auto;
-    font-family: var(--mono);
-    font-size: 14px;
-    color: var(--green);
-    background: #000;
-    padding: 0 6px;
-    border: 1px solid var(--dark);
-  }
-  .drop ol {
-    outline: 2px dashed var(--green);
-    outline-offset: -4px;
-  }
-  .hint {
-    font-size: 10px;
-    color: #7f8aa0;
-    padding: 0 8px 8px;
-    line-height: 1.35;
-  }
-  .msg {
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--orange);
-    padding: 0 8px 6px;
-    margin: 0;
-  }
-  .cfg-row {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    font-size: 10px;
-    font-family: var(--mono);
-    color: #cfd8dc;
-  }
-  .cfg-desc {
-    font-size: 10px;
-    color: #90a4ae;
-    line-height: 1.3;
-    background: #11151e;
-    padding: 5px;
-    border: 1px solid #1f293d;
-  }
-  .code-block {
-    background: #000;
-    color: #38bdf8;
-    padding: 4px 6px;
-    border: 1px solid #1f293d;
-    font-family: var(--mono);
-    font-size: 11px;
-    white-space: pre-wrap;
-    user-select: text;
-  }
-  .quick-backend-bar {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    background: #101522;
-    padding: 3px 6px;
-    border-top: 1px solid #1e2638;
-    border-bottom: 1px solid #000;
-    font-size: 9px;
-    font-family: var(--mono);
-  }
-  .quick-backend-bar label {
-    color: #7f8aa0;
-    white-space: nowrap;
-  }
-  @media (max-width: 480px) {
-    .time { font-size: 34px; }
-    .timebox { min-width: 95px; }
-    ol { height: 200px; }
-    li.t .x { opacity: 1; }
-  }
+  .foot { display: flex; align-items: center; gap: 4px; padding: 4px 8px 8px; flex-wrap: wrap; }
+  .total { margin-left: auto; font-family: var(--mono); font-size: 15px; color: var(--green); background: #000; padding: 0 6px; border: 1px solid var(--dark); }
+  .drop ol { outline: 2px dashed var(--green); outline-offset: -4px; }
+  .hint { font-size: 10px; color: #7f8aa0; padding: 0 8px 8px; }
+  .msg { font-family: var(--mono); font-size: 15px; color: var(--orange); padding: 0 8px 6px; margin: 0; }
+  @media (max-width: 480px) { .time { font-size: 36px; } .timebox { min-width: 100px; } ol { height: 220px; } li.t .x { opacity: 1; } }
 </style>
 </head>
 <body>
 <div class="stack" id="app">
-<audio id="audio" preload="metadata"></audio>
-<!-- BARRA RÁPIDA DE ENDPOINT SERVERLESS VERCEL -->
-<section class="win" style="box-shadow:none;">
-<div class="quick-backend-bar">
-<label for="topApiPreset">VERCEL BACKEND:</label>
-<select class="cfg-select" id="topApiPreset" style="height:20px; font-size:10px; flex:1;">
-<option value="/api">Mismo Dominio Vercel (/api)</option>
-<option value="custom">URL Externa Personalizada...</option>
-</select>
-<span class="badge-vercel" id="backendBadge" title="Estado de la conexión serverless">VERCEL READY</span>
+  <audio id="audio" preload="metadata"></audio>
+  
+  <!-- REPRODUCTOR PRINCIPAL -->
+  <section class="win" aria-label="Reproductor">
+    <div class="title"><span class="grip"></span>DRIVE-AMP v3.0 [G-DRIVE / OFFLINE]<span class="grip"></span></div>
+    <div class="body">
+      <div class="lcd">
+        <div class="top">
+          <div class="timebox"><span class="state" id="state">&#9632;</span><span class="time" id="time">0:00</span></div>
+          <canvas id="viz" width="190" height="44" aria-hidden="true"></canvas>
+        </div>
+        <div class="marq"><span id="ttl">DRIVE-AMP &#8212; Peg&#225; un link de Drive o arrastr&#225; m&#250;sica</span></div>
+        <div class="info"><span id="kbps">ONLINE</span><span id="dur">--:--</span><span id="cnt">0 pistas</span></div>
+      </div>
+      <input type="range" id="seek" min="0" max="0" step="0.1" value="0" disabled aria-label="Posici&#243;n">
+      <div class="row">
+        <div class="tr">
+          <button class="tb" id="prev" aria-label="Anterior">&#9198;</button>
+          <button class="tb" id="play" aria-label="Reproducir">&#9654;</button>
+          <button class="tb" id="pause" aria-label="Pausa">&#9208;</button>
+          <button class="tb" id="stop" aria-label="Detener">&#9209;</button>
+          <button class="tb" id="next" aria-label="Siguiente">&#9197;</button>
+          <button class="tb" id="eject" aria-label="Abrir archivos" title="Abrir archivos">&#9167;</button>
+        </div>
+        <div class="tr">
+          <button class="pill" id="shuf" aria-pressed="false">ALEAT</button>
+          <button class="pill" id="rep" aria-pressed="false">REP</button>
+          <button class="pill drive-btn" id="toggledrive">&#10004; ABRIR DRIVE</button>
+        </div>
+      </div>
+      <div class="vol"><span>VOL</span><input type="range" id="vol" min="0" max="1" step="0.01" value="0.8" aria-label="Volumen"><span id="volv">80%</span></div>
+    </div>
+  </section>
+
+  <!-- SOLAPA COLAPSABLE GOOGLE DRIVE -->
+  <section class="win" id="drivewin" aria-label="Google Drive">
+    <div class="title green" id="drivetitle">
+      <span class="grip"></span>AGREGAR ENLACE DE GOOGLE DRIVE (ARCHIVO O CARPETA)<span class="grip"></span>
+      <button class="btn-min" id="drivemin" aria-label="Minimizar">&#8722;</button>
+    </div>
+    <div class="body drive-drawer" id="drivedrawer">
+      <textarea class="drive-input" id="driveurl" placeholder="Peg&#225; aqu&#237; uno o varios links p&#250;blicos de Google Drive:
+- Archivo: https://drive.google.com/file/d/ID/view
+- Carpeta: https://drive.google.com/drive/folders/ID"></textarea>
+      <div class="drive-actions">
+        <button class="wide drive-btn" id="btnloaddrive">+ CARGAR A LISTA</button>
+        <button class="wide" id="btncleardrive">LIMPIAR</button>
+        <span class="status-badge" id="drivestatus"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- LISTA DE REPRODUCCIÓN -->
+  <section class="win" aria-label="Lista de reproducci&#243;n" id="plwin">
+    <div class="title"><span class="grip"></span>LISTA DE REPRODUCCI&#211;N<span class="grip"></span></div>
+    <div class="body" style="padding:4px"><ol id="list"></ol></div>
+    <p class="msg" id="msg" hidden></p>
+    <div class="foot">
+      <button class="wide" id="addf">+ ARCHIVOS</button>
+      <button class="wide" id="addd">+ CARPETA</button>
+      <button class="wide" id="clear" disabled>VACIAR</button>
+      <span class="total" id="tot">0:00/--:--</span>
+    </div>
+    <div class="hint">Soporta enlaces p&#250;blicos de Google Drive (v&#237;a /api/stream y /api/resolve) y archivos locales con persistencia.</div>
+  </section>
+
+  <input type="file" id="fileIn" accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg,.opus,.aac" multiple hidden>
+  <input type="file" id="dirIn" webkitdirectory multiple hidden>
 </div>
-</section>
-<!-- VENTANA PRINCIPAL DEL REPRODUCTOR -->
-<section aria-label="Reproductor" class="win">
-<div class="title">
-<span class="grip"></span>DRIVE-AMP v3.0 [VERCEL SERVERLESS]<span class="grip"></span>
-<button aria-label="Configurar backend serverless" class="cfg-btn" id="cfgToggle" title="Configurar endpoints /api/resolve y /api/stream">⚙ VERCEL CFG</button>
-<button aria-label="Minimizar" class="win-btn">_</button>
-<button aria-label="Cerrar" class="win-btn close">✕</button>
-</div>
-<div class="body">
-<div class="lcd">
-<div class="top">
-<div class="timebox">
-<span class="state" id="state">■</span>
-<span class="time" id="time">0:00</span>
-</div>
-<canvas aria-hidden="true" height="44" id="viz" width="190"></canvas>
-</div>
-<div class="marq">
-<span id="ttl">DRIVE-AMP — agregá archivos o pegá una carpeta pública de Drive</span>
-</div>
-<div class="info">
-<span id="kbps">VERCEL PROXY / READY</span>
-<span id="dur">--:--</span>
-<span id="cnt">0 pistas</span>
-</div>
-</div>
-<input aria-label="Posición de reproducción" disabled="" id="seek" max="0" min="0" step="0.1" type="range" value="0"/>
-<div class="row">
-<div class="tr">
-<button aria-label="Anterior" class="tb" id="prev" title="Pista anterior">⏮</button>
-<button aria-label="Reproducir" class="tb" id="play" title="Reproducir">▶</button>
-<button aria-label="Pausa" class="tb" id="pause" title="Pausa">⏸</button>
-<button aria-label="Detener" class="tb" id="stop" title="Detener">⏹</button>
-<button aria-label="Siguiente" class="tb" id="next" title="Siguiente pista">⏭</button>
-<button aria-label="Abrir archivos locales" class="tb" id="eject" title="Abrir archivos locales">⏏</button>
-</div>
-<div class="tr">
-<button aria-pressed="false" class="pill" id="shuf" title="Modo aleatorio">ALEAT</button>
-<button aria-pressed="false" class="pill" id="rep" title="Repetición">REP</button>
-<button aria-expanded="true" class="drive-toggle-btn open" id="driveToggle" title="Desplegar/Ocultar enlace de Google Drive">
-  CARGAR DRIVE <span class="check-mark">✔</span>
-</button>
-<button aria-expanded="false" class="drive-search-btn" id="searchToggle" title="Explorador y carpetas públicas de Drive">
-  BUSCAR DRIVE <span class="search-mark">🔍</span>
-</button>
-</div>
-</div>
-<div class="vol">
-<span>VOL</span>
-<input aria-label="Volumen" id="vol" max="1" min="0" step="0.01" type="range" value="0.8"/>
-<span id="volv">80%</span>
-</div>
-</div>
-</section>
-<!-- SOLAPA PLEGABLE: CONFIGURACIÓN SERVERLESS DE VERCEL -->
-<section aria-label="Configuración de Backend Vercel" class="win collapsed" id="configWin">
-<div class="title config-title" id="configTitleBar" title="Clic para plegar/desplegar">
-<span>⚙</span>
-<span>ARQUITECTURA SERVERLESS VERCEL (/api/resolve &amp; /api/stream)</span>
-<span class="grip"></span>
-<button aria-label="Plegar" class="win-btn" id="configMinBtn">+</button>
-</div>
-<div class="body">
-<div class="cfg-desc">
-  Drive-Amp utiliza funciones serverless reales en Vercel para sortear el bloqueo CORS de Google Drive y transmitir audio binario con cabeceras HTTP <code style="color:#00ff41">Range: bytes=...</code>.
-</div>
-<div class="cfg-row">
-<label for="cfgApiBase">BASE URL DE LA API DE VERCEL:</label>
-<div style="display:flex; gap:4px;">
-<input class="cfg-input" id="cfgApiBase" placeholder="/api o https://tu-drive-amp.vercel.app/api" type="text" value="/api"/>
-<button class="btn-cfg-test" id="cfgTestBtn">[PROBAR PING]</button>
-</div>
-<span style="font-size:9px; color:#7f95b3;">* Usa <code>/api</code> si esta app corre en el mismo proyecto Vercel. Si corre en localhost o GitHub Pages, ingresa la URL completa de tu Vercel deploy.</span>
-</div>
-<div class="cfg-row" style="margin-top:4px;">
-<label>ENDPOINTS REQUERIDOS EN TU REPOSITORIO VERCEL:</label>
-<div class="code-block">api/resolve.js  -&gt; Resuelve carpetas de Drive y devuelve { files: [{ id, name, size }] }
-api/stream.js   -&gt; Recibe ?id=FILE_ID y hace pipe directo del streaming con bypass CORS</div>
-</div>
-<div class="drive-status" id="cfgStatus" style="color:#ffd8a8;">Endpoints configurados y guardados en localStorage.</div>
-</div>
-</section>
-<!-- SOLAPA PLEGABLE: BUSCADOR Y CARPETAS PÚBLICAS DE DRIVE -->
-<section aria-label="Buscar en Google Drive" class="win collapsed" id="searchWin">
-<div class="title search-title" id="searchTitleBar" title="Clic para plegar/desplegar">
-<span class="search-mark">🔍</span>
-<span>EXPLORADOR DE CARPETAS PÚBLICAS DE GOOGLE DRIVE</span>
-<span class="grip"></span>
-<button aria-label="Plegar" class="win-btn" id="searchMinBtn">+</button>
-</div>
-<div class="body">
-<div style="display:flex; gap:4px; align-items:center;">
-<input class="drive-search-input" id="driveSearchInput" placeholder="Pega URL o ID de carpeta pública de Drive..." type="text"/>
-<button class="btn-search" id="driveSearchBtn">[RESOLVER]</button>
-</div>
-<div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">
-<span style="font-family:var(--mono); font-size:11px; color:#7f95b3;">EJEMPLOS REALES:</span>
-<button class="sm-tag-btn" data-url="https://drive.google.com/drive/folders/17kChiptuneClassicVault">Carpeta 8-Bit</button>
-<button class="sm-tag-btn" data-url="https://drive.google.com/drive/folders/1SynthVault80sDirectPublic">Carpeta Synthwave</button>
-<button class="sm-tag-btn" data-url="https://drive.google.com/file/d/1NightCallSynthwaveMasterAudio01/view">Pista Directa</button>
-</div>
-<div class="drive-status" id="searchStatus" style="color:#72a9ff;">Ingresa una carpeta o pista pública para consultar al endpoint /api/resolve de Vercel.</div>
-<ul class="search-results-box" id="searchResults" style="display:none;"></ul>
-</div>
-</section>
-<!-- SOLAPA PLEGABLE: AGREGAR ENLACE DE GOOGLE DRIVE -->
-<section aria-label="Importar de Google Drive" class="win" id="driveWin">
-<div class="title drive-title" id="driveTitleBar" title="Clic para plegar/desplegar">
-<span class="check-mark">✔</span>
-<span>AGREGAR ENLACE DE GOOGLE DRIVE (ARCHIVO O CARPETA)</span>
-<span class="grip"></span>
-<button aria-label="Plegar" class="win-btn" id="driveMinBtn">−</button>
-</div>
-<div class="body">
-<textarea class="drive-input-box" id="driveInput" placeholder="Pega aquí URLs públicas de Google Drive:
-- Carpeta: https://drive.google.com/drive/folders/1A2B3C4D5E...
-- Archivo de audio: https://drive.google.com/file/d/1X9Y8Z.../view
-El backend Vercel extraerá todas las pistas reales y las streameará directamente." rows="3"></textarea>
-<div class="drive-status" id="driveStatus">Listo para resolver carpetas y archivos mediante /api/resolve.</div>
-<div class="drive-bar">
-<button class="wide btn-accent" id="driveAddBtn">+ CARGAR A LISTA</button>
-<button class="wide" id="driveClearBtn">LIMPIAR</button>
-<button class="wide" id="driveDemoBtn" title="Pegar URL de carpeta de ejemplo para resolver">+ URL EJEMPLO</button>
-</div>
-</div>
-</section>
-<!-- VENTANA DE LISTA DE REPRODUCCIÓN -->
-<section aria-label="Lista de reproducción" class="win" id="plwin">
-<div class="title">
-<span class="grip"></span>LISTA DE REPRODUCCIÓN<span class="grip"></span>
-<button aria-label="Minimizar" class="win-btn">_</button>
-</div>
-<div class="body" style="padding:4px">
-<ol id="list"></ol>
-</div>
-<p class="msg" hidden="" id="msg"></p>
-<div class="foot">
-<button class="wide" id="addf">+ ARCHIVOS</button>
-<button class="wide" id="addd">+ CARPETA</button>
-<button class="wide" disabled="" id="clear">VACIAR</button>
-<span class="total" id="tot">0:00/--:--</span>
-</div>
-<div class="hint">
-  Soporta archivos locales y streaming directo de Google Drive vía Serverless Vercel (/api/stream). Arrastrá y soltá pistas aquí.
-</div>
-</section>
-<input accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg,.opus,.aac" hidden="" id="fileIn" multiple="" type="file"/>
-<input hidden="" id="dirIn" multiple="" type="file" webkitdirectory=""/>
-</div>
+
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
   const audio = $("audio"), listEl = $("list"), msgEl = $("msg");
-  const driveWin = $("driveWin"), driveToggle = $("driveToggle");
-  const searchWin = $("searchWin"), searchToggle = $("searchToggle");
-  const configWin = $("configWin"), cfgToggle = $("cfgToggle");
-  const driveInput = $("driveInput"), driveStatus = $("driveStatus");
-  const driveSearchInput = $("driveSearchInput"), searchResults = $("searchResults"), searchStatus = $("searchStatus");
-  const cfgApiBase = $("cfgApiBase"), cfgStatus = $("cfgStatus"), topApiPreset = $("topApiPreset"), backendBadge = $("backendBadge");
-  
   const AUDIO_RE = /\.(mp3|m4a|wav|flac|ogg|oga|opus|aac|weba|wma)$/i;
-
-  let tracks = [];
+  let tracks = [];      // {id, name, url, dur, blob, isDrive, driveId}
   let cur = -1, shuffle = false, repeat = false, uid = 0;
   let saveWarned = false;
 
-  /* ---------- Storage & DB ---------- */
-  const store = {
-    get: (k, d) => { try { const v = localStorage.getItem("amp." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
-    set: (k, v) => { try { localStorage.setItem("amp." + k, JSON.stringify(v)); } catch (e) {} },
-  };
-
+  /* ---------- IndexedDB & LocalStorage ---------- */
   const DB = (() => {
     let dbp = null;
     const open = () => dbp || (dbp = new Promise((res, rej) => {
       try {
-        const r = indexedDB.open("amp-offline", 3);
+        const r = indexedDB.open("amp-offline", 2);
         r.onupgradeneeded = () => {
           if (!r.result.objectStoreNames.contains("tracks")) {
             r.result.createObjectStore("tracks", { keyPath: "id" });
@@ -917,375 +239,18 @@ El backend Vercel extraerá todas las pistas reales y las streameará directamen
     };
   })();
 
+  const store = {
+    get: (k, d) => { try { const v = localStorage.getItem("amp." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set: (k, v) => { try { localStorage.setItem("amp." + k, JSON.stringify(v)); } catch (e) {} },
+  };
+
   const persist = (t) => {
-    if (t.blob) {
-      DB.put({ id: t.id, name: t.name, blob: t.blob, dur: t.dur, isDrive: false, driveId: null }).catch(() => {
-        if (!saveWarned) { saveWarned = true; say("No se pudo guardar en IndexedDB."); }
-      });
-    } else {
-      DB.put({ id: t.id, name: t.name, url: t.url, dur: t.dur, isDrive: !!t.isDrive, driveId: t.driveId || null }).catch(() => {});
-    }
+    // Si es pista local se guarda blob, si es Drive se guarda su URL de stream
+    DB.put({ id: t.id, name: t.name, blob: t.blob || null, url: t.url, dur: t.dur, isDrive: !!t.isDrive, driveId: t.driveId || null }).catch(() => {
+      if (!saveWarned) { saveWarned = true; say("No se pudo guardar la lista en memoria local."); }
+    });
   };
 
-  /* ---------- Configuración de Endpoints Vercel ---------- */
-  function getApiBase() {
-    let base = (cfgApiBase.value || "").trim();
-    if (!base) base = "/api";
-    return base.replace(/\/+$/, "");
-  }
-
-  function getStreamEndpoint(driveId) {
-    const base = getApiBase();
-    return `${base}/stream?id=${encodeURIComponent(driveId)}`;
-  }
-
-  function getResolveEndpoint() {
-    const base = getApiBase();
-    return `${base}/resolve`;
-  }
-
-  function saveConfig() {
-    const base = getApiBase();
-    store.set("apiBase", base);
-    updatePresetSelector();
-    return base;
-  }
-
-  function updatePresetSelector() {
-    const base = getApiBase();
-    if (base === "/api") {
-      topApiPreset.value = "/api";
-    } else {
-      topApiPreset.value = "custom";
-    }
-  }
-
-  function loadConfig() {
-    const saved = store.get("apiBase", "/api");
-    cfgApiBase.value = saved;
-    updatePresetSelector();
-  }
-
-  topApiPreset.onchange = () => {
-    if (topApiPreset.value === "/api") {
-      cfgApiBase.value = "/api";
-    } else {
-      const custom = prompt("Ingresa la URL base de tu backend Vercel (ej: https://tu-drive-amp.vercel.app/api):", cfgApiBase.value !== "/api" ? cfgApiBase.value : "https://mi-drive-amp.vercel.app/api");
-      if (custom && custom.trim()) {
-        cfgApiBase.value = custom.trim().replace(/\/+$/, "");
-      }
-    }
-    saveConfig();
-    testEndpoint();
-  };
-
-  cfgApiBase.onchange = () => {
-    saveConfig();
-  };
-
-  async function testEndpoint() {
-    const base = getApiBase();
-    cfgStatus.textContent = `Probando conexión con ${base}...`;
-    cfgStatus.style.color = "var(--orange)";
-    backendBadge.textContent = "VERIFICANDO...";
-    backendBadge.className = "badge-vercel warn";
-
-    try {
-      // Probar si el endpoint /resolve responde o si responde la ruta base
-      const testUrl = base === "/api" ? "/api/resolve" : `${base}/resolve`;
-      const res = await fetch(testUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ping: true })
-      });
-
-      if (res.status === 200 || res.status === 400 || res.status === 405) {
-        // La función serverless existe y respondió en Vercel
-        cfgStatus.textContent = `✔ Vercel Serverless Function activa (${base}) - HTTP ${res.status}`;
-        cfgStatus.style.color = "var(--green)";
-        backendBadge.textContent = "VERCEL READY";
-        backendBadge.className = "badge-vercel";
-      } else {
-        cfgStatus.textContent = `Respuesta ${res.status} desde ${base}. Verifica api/resolve.js en Vercel.`;
-        cfgStatus.style.color = "var(--orange)";
-        backendBadge.textContent = `HTTP ${res.status}`;
-        backendBadge.className = "badge-vercel warn";
-      }
-    } catch (e) {
-      cfgStatus.textContent = `Aviso: No se pudo conectar a ${base}. Si estás en local o sin backend, configúralo en ⚙ CFG.`;
-      cfgStatus.style.color = "#ff9d00";
-      backendBadge.textContent = "STANDALONE / LOCAL";
-      backendBadge.className = "badge-vercel warn";
-    }
-  }
-
-  $("cfgTestBtn").onclick = () => {
-    saveConfig();
-    testEndpoint();
-  };
-
-  /* ---------- Paneles Desplegables ---------- */
-  function toggleDrivePanel() {
-    const isCollapsed = driveWin.classList.toggle("collapsed");
-    driveToggle.classList.toggle("open", !isCollapsed);
-    driveToggle.setAttribute("aria-expanded", String(!isCollapsed));
-    $("driveMinBtn").textContent = isCollapsed ? "+" : "−";
-    store.set("drivePanelOpen", !isCollapsed);
-  }
-  driveToggle.onclick = toggleDrivePanel;
-  $("driveTitleBar").onclick = (e) => { if (e.target.tagName !== "BUTTON") toggleDrivePanel(); };
-  $("driveMinBtn").onclick = (e) => { e.stopPropagation(); toggleDrivePanel(); };
-
-  function toggleSearchPanel() {
-    const isCollapsed = searchWin.classList.toggle("collapsed");
-    searchToggle.classList.toggle("open", !isCollapsed);
-    searchToggle.setAttribute("aria-expanded", String(!isCollapsed));
-    $("searchMinBtn").textContent = isCollapsed ? "+" : "−";
-    store.set("searchPanelOpen", !isCollapsed);
-    if (!isCollapsed) setTimeout(() => driveSearchInput.focus(), 60);
-  }
-  searchToggle.onclick = toggleSearchPanel;
-  $("searchTitleBar").onclick = (e) => { if (e.target.tagName !== "BUTTON") toggleSearchPanel(); };
-  $("searchMinBtn").onclick = (e) => { e.stopPropagation(); toggleSearchPanel(); };
-
-  function toggleConfigPanel() {
-    const isCollapsed = configWin.classList.toggle("collapsed");
-    cfgToggle.classList.toggle("open", !isCollapsed);
-    $("configMinBtn").textContent = isCollapsed ? "+" : "−";
-    store.set("configPanelOpen", !isCollapsed);
-  }
-  cfgToggle.onclick = toggleConfigPanel;
-  $("configTitleBar").onclick = (e) => { if (e.target.tagName !== "BUTTON") toggleConfigPanel(); };
-  $("configMinBtn").onclick = (e) => { e.stopPropagation(); toggleConfigPanel(); };
-
-  /* ---------- Extracción de IDs de Google Drive ---------- */
-  function parseDriveUrl(url) {
-    if (!url) return null;
-    const folderMatch = url.match(/\/folders\/([a-zA-Z0-9_-]+)/i) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/i);
-    const isFolder = /\/folders\//i.test(url);
-    const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/i) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/i);
-
-    if (isFolder && folderMatch) {
-      return { type: "folder", id: folderMatch[1] };
-    }
-    if (fileMatch) {
-      return { type: "file", id: fileMatch[1] };
-    }
-    // Si pegan únicamente el ID directo alfanumérico
-    if (/^[a-zA-Z0-9_-]{25,}$/.test(url.trim())) {
-      return { type: "file", id: url.trim() };
-    }
-    return null;
-  }
-
-  /* ---------- Llamadas a Funciones Serverless Vercel (/api/resolve y /api/stream) ---------- */
-  async function resolveDriveUrl(urlOrId) {
-    const parsed = parseDriveUrl(urlOrId);
-    const resolveUrl = getResolveEndpoint();
-
-    setMarquee("RESOLVIENDO EN GOOGLE DRIVE MEDIANTE VERCEL...");
-    setDriveMsg("Conectando con /api/resolve de Vercel...", false);
-
-    try {
-      const resp = await fetch(resolveUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: urlOrId,
-          type: parsed ? parsed.type : undefined,
-          id: parsed ? parsed.id : undefined
-        })
-      });
-
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
-      }
-
-      const data = await resp.json();
-      if (!data || !data.files || !Array.isArray(data.files)) {
-        throw new Error("El endpoint /api/resolve no devolvió una lista de archivos válida.");
-      }
-
-      return data.files.map(item => ({
-        name: item.name || `Pista Drive (${item.id.slice(0, 6)})`,
-        id: item.id,
-        size: item.size || 0
-      }));
-    } catch (err) {
-      console.warn("Fallo en /api/resolve de Vercel:", err);
-      // Fallback directo real en caso de que sea un archivo directo: construimos el stream sin simulación
-      if (parsed && parsed.type === "file") {
-        return [{
-          name: `Drive Audio [${parsed.id.slice(0, 8)}]`,
-          id: parsed.id
-        }];
-      }
-      throw err;
-    }
-  }
-
-  async function handleAddDriveInput() {
-    const text = driveInput.value.trim();
-    if (!text) {
-      setDriveMsg("Ingresa una URL de archivo o carpeta de Drive.", true);
-      return;
-    }
-
-    const lines = text.split(/[\n\r\s,]+/).filter(Boolean);
-    let countAdded = 0;
-    setDriveMsg("Consultando Vercel Serverless...");
-
-    for (const line of lines) {
-      try {
-        const files = await resolveDriveUrl(line);
-        if (files && files.length) {
-          files.forEach(f => {
-            const streamUrl = getStreamEndpoint(f.id);
-            const newTrack = {
-              id: ++uid,
-              name: f.name,
-              url: streamUrl,
-              dur: undefined,
-              blob: null,
-              isDrive: true,
-              driveId: f.id
-            };
-            tracks.push(newTrack);
-            persist(newTrack);
-            countAdded++;
-          });
-        }
-      } catch (e) {
-        setDriveMsg(`Error al resolver: ${e.message}`, true);
-      }
-    }
-
-    if (countAdded > 0) {
-      setDriveMsg(`✔ Se agregaron ${countAdded} pista(s) reales desde Google Drive.`);
-      driveInput.value = "";
-      render();
-      if (cur === -1) select(tracks.length - countAdded, true);
-    } else {
-      setDriveMsg("No se pudieron extraer archivos. Revisa el backend Vercel o los permisos públicos del enlace.", true);
-    }
-    setTitle();
-  }
-
-  $("driveAddBtn").onclick = handleAddDriveInput;
-  $("driveClearBtn").onclick = () => {
-    driveInput.value = "";
-    setDriveMsg("Área de enlaces limpia.");
-  };
-  $("driveDemoBtn").onclick = () => {
-    driveInput.value = "https://drive.google.com/drive/folders/17kChiptuneClassicVault";
-    setDriveMsg("URL de carpeta cargada. Presiona '+ CARGAR A LISTA' para consultar a /api/resolve.");
-  };
-
-  /* ---------- Explorador / Buscador Serverless ---------- */
-  async function performDriveQuery(query) {
-    const q = (query || "").trim();
-    if (!q) {
-      searchStatus.textContent = "Ingresa una URL de carpeta de Drive para explorarla.";
-      searchStatus.style.color = "var(--orange)";
-      searchResults.style.display = "none";
-      return;
-    }
-
-    searchStatus.textContent = `Consultando carpeta vía ${getResolveEndpoint()}...`;
-    searchStatus.style.color = "#38bdf8";
-    setMarquee("EXPLORANDO CARPETA DRIVE...");
-
-    try {
-      const files = await resolveDriveUrl(q);
-      searchResults.innerHTML = "";
-      if (!files || !files.length) {
-        searchStatus.textContent = "No se encontraron pistas de audio en esa carpeta.";
-        searchStatus.style.color = "var(--orange)";
-        searchResults.style.display = "none";
-        setTitle();
-        return;
-      }
-
-      searchStatus.textContent = `✔ Se encontraron ${files.length} pista(s) reales en la carpeta.`;
-      searchStatus.style.color = "var(--green)";
-      searchResults.style.display = "block";
-      setTitle();
-
-      files.forEach(f => {
-        const li = document.createElement("li");
-        li.className = "search-item";
-
-        const info = document.createElement("div");
-        info.className = "search-item-info";
-        info.innerHTML = `
-          <div class="search-item-title" title="${f.name}">${f.name}</div>
-          <div class="search-item-sub">
-            <span>ID: ${f.id.slice(0, 10)}...</span>
-            <span>Vercel /api/stream</span>
-          </div>
-        `;
-
-        const btns = document.createElement("div");
-        btns.style.display = "flex";
-        btns.style.gap = "4px";
-
-        const driveLink = document.createElement("a");
-        driveLink.className = "btn-open-drive";
-        driveLink.href = `https://drive.google.com/file/d/${f.id}/view`;
-        driveLink.target = "_blank";
-        driveLink.rel = "noopener noreferrer";
-        driveLink.textContent = "DRIVE ↗";
-
-        const addBtn = document.createElement("button");
-        addBtn.className = "btn-add-result";
-        addBtn.textContent = "+ CARGAR";
-        addBtn.onclick = () => {
-          const streamUrl = getStreamEndpoint(f.id);
-          const t = {
-            id: ++uid,
-            name: f.name,
-            url: streamUrl,
-            dur: undefined,
-            blob: null,
-            isDrive: true,
-            driveId: f.id
-          };
-          tracks.push(t);
-          persist(t);
-          render();
-          select(tracks.length - 1, true);
-          addBtn.textContent = "✔ CARGADO";
-          addBtn.disabled = true;
-        };
-
-        btns.appendChild(driveLink);
-        btns.appendChild(addBtn);
-        li.appendChild(info);
-        li.appendChild(btns);
-        searchResults.appendChild(li);
-      });
-    } catch (err) {
-      searchStatus.textContent = `Error al consultar /api/resolve: ${err.message}`;
-      searchStatus.style.color = "#ff4a3d";
-      searchResults.style.display = "none";
-      setTitle();
-    }
-  }
-
-  $("driveSearchBtn").onclick = () => performDriveQuery(driveSearchInput.value);
-  driveSearchInput.onkeydown = (e) => {
-    if (e.key === "Enter") performDriveQuery(driveSearchInput.value);
-  };
-
-  document.querySelectorAll(".sm-tag-btn").forEach(btn => {
-    btn.onclick = () => {
-      const url = btn.getAttribute("data-url");
-      driveSearchInput.value = url;
-      performDriveQuery(url);
-    };
-  });
-
-  /* ---------- Helpers de UI ---------- */
   const fmt = (s) => {
     if (s === undefined || !isFinite(s)) return "--:--";
     s = Math.max(0, Math.floor(s));
@@ -1293,20 +258,185 @@ El backend Vercel extraerá todas las pistas reales y las streameará directamen
   };
 
   const say = (t) => { msgEl.hidden = !t; msgEl.textContent = t || ""; };
-  const setDriveMsg = (t, isErr = false) => {
-    driveStatus.textContent = t;
-    driveStatus.style.color = isErr ? "#ff4a3d" : "var(--green)";
-  };
 
-  function setMarquee(text) {
-    const el = $("ttl");
-    el.textContent = text;
-    el.className = text.length > 30 ? "scroll" : "";
-    el.style.animation = "none";
-    void el.offsetWidth;
-    el.style.animation = "";
+  /* ---------- Google Drive Drawer Collapse ---------- */
+  let driveOpen = store.get("driveOpen", true);
+  const updateDriveDrawer = () => {
+    $("drivedrawer").classList.toggle("collapsed", !driveOpen);
+    $("drivemin").textContent = driveOpen ? "−" : "+";
+    $("toggledrive").classList.toggle("on", driveOpen);
+    store.set("driveOpen", driveOpen);
+  };
+  $("toggledrive").onclick = () => { driveOpen = !driveOpen; updateDriveDrawer(); };
+  $("drivetitle").onclick = (e) => { if (e.target.id !== "driveurl") { driveOpen = !driveOpen; updateDriveDrawer(); } };
+  updateDriveDrawer();
+
+  /* ---------- Playlist Rendering ---------- */
+  function render() {
+    listEl.innerHTML = "";
+    if (!tracks.length) {
+      const li = document.createElement("li"); li.className = "empty"; li.textContent = "— La lista está vacía —";
+      listEl.appendChild(li);
+    }
+    tracks.forEach((t, i) => {
+      const li = document.createElement("li"); li.className = "t" + (i === cur ? " act" : "");
+      const m = document.createElement("button"); m.className = "m"; m.title = "Reproducir";
+      m.innerHTML = '<span class="n"></span><span class="tt"></span><span class="d"></span>';
+      m.children[0].textContent = (i + 1) + ".";
+      m.children[1].innerHTML = (t.isDrive ? '<span class="tag">[DRIVE]</span>' : '') + escapeHtml(t.name);
+      m.children[2].textContent = fmt(t.dur);
+      m.addEventListener("click", () => select(i, true));
+      const x = document.createElement("button"); x.className = "x"; x.textContent = "✕"; x.setAttribute("aria-label", "Quitar " + t.name);
+      x.addEventListener("click", () => remove(i));
+      li.append(m, x); listEl.appendChild(li);
+    });
+    $("cnt").textContent = tracks.length + " pistas";
+    $("clear").disabled = !tracks.length;
+    updateTotal();
+    const a = listEl.querySelector(".act"); if (a) a.scrollIntoView({ block: "nearest" });
   }
 
+  function escapeHtml(str) {
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function updateTotal() {
+    const sum = tracks.reduce((s, t) => s + (t.dur || 0), 0);
+    $("tot").textContent = fmt(audio.currentTime || 0) + "/" + fmt(audio.duration) + (sum ? " · " + fmt(sum) : "");
+  }
+
+  function setTitle() {
+    const t = tracks[cur];
+    const el = $("ttl");
+    el.textContent = t ? (cur + 1) + ". " + (t.isDrive ? "[DRIVE] " : "") + t.name : "DRIVE-AMP — Pegá un link de Drive o arrastrá música";
+    el.className = el.textContent.length > 30 ? "scroll" : "";
+    el.style.animation = "none"; void el.offsetWidth; el.style.animation = "";
+  }
+
+  function select(i, autoplay) {
+    if (i < 0 || i >= tracks.length) return;
+    cur = i;
+    store.set("cur", tracks[i].id);
+    
+    // Asignación directa de URL (archivo local blob o /api/stream?id=...)
+    audio.src = tracks[i].url;
+    audio.load();
+    setTitle(); render();
+    if (autoplay) play();
+  }
+
+  function remove(i) {
+    if (tracks[i].url && tracks[i].url.startsWith("blob:")) URL.revokeObjectURL(tracks[i].url);
+    DB.del(tracks[i].id).catch(() => {});
+    const wasCur = i === cur;
+    tracks.splice(i, 1);
+    if (wasCur) { audio.pause(); audio.removeAttribute("src"); audio.load(); cur = -1; setState(); setTitle(); }
+    else if (i < cur) cur--;
+    render();
+  }
+
+  function clearAll() {
+    tracks.forEach((t) => { if (t.url && t.url.startsWith("blob:")) URL.revokeObjectURL(t.url); });
+    DB.clear().catch(() => {}); store.set("cur", null);
+    tracks = []; cur = -1; audio.pause(); audio.removeAttribute("src"); audio.load();
+    setState(); setTitle(); render();
+    $("time").textContent = "0:00"; $("dur").textContent = "--:--";
+  }
+
+  /* ---------- Google Drive Resolver & Adder ---------- */
+  function extractDriveFileId(text) {
+    const m = text.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
+              text.match(/id=([a-zA-Z0-9_-]+)/) ||
+              text.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/);
+    return m ? m[1] : null;
+  }
+
+  function extractDriveFolderId(text) {
+    const m = text.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+    return m ? m[1] : null;
+  }
+
+  $("btncleardrive").onclick = () => {
+    $("driveurl").value = "";
+    $("drivestatus").textContent = "";
+  };
+
+  $("btnloaddrive").onclick = async () => {
+    const raw = $("driveurl").value.trim();
+    if (!raw) {
+      $("drivestatus").textContent = "Pegá un enlace primero.";
+      return;
+    }
+
+    const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    let addedCount = 0;
+    $("drivestatus").textContent = "Procesando...";
+
+    for (const line of lines) {
+      const folderId = extractDriveFolderId(line);
+      const fileId = extractDriveFileId(line);
+
+      // CASO 1: Carpeta de Google Drive (resuelve vía /api/resolve)
+      if (folderId) {
+        $("drivestatus").textContent = "Leyendo carpeta...";
+        try {
+          const res = await fetch(`/api/resolve?id=${encodeURIComponent(folderId)}`);
+          const data = await res.json();
+          if (!res.ok || data.error) {
+            $("drivestatus").textContent = data.error || "Error al leer carpeta.";
+            continue;
+          }
+          if (data.tracks && data.tracks.length) {
+            data.tracks.forEach(track => {
+              const streamUrl = track.streamUrl.startsWith("http") ? track.streamUrl : window.location.origin + track.streamUrl;
+              const t = {
+                id: ++uid,
+                name: track.name.replace(AUDIO_RE, ""),
+                url: streamUrl,
+                dur: undefined,
+                isDrive: true,
+                driveId: track.id
+              };
+              tracks.push(t);
+              persist(t);
+              addedCount++;
+            });
+          } else {
+            $("drivestatus").textContent = "Carpeta sin pistas de audio.";
+          }
+        } catch (err) {
+          $("drivestatus").textContent = "Error de red al consultar /api/resolve";
+        }
+      } 
+      // CASO 2: Archivo individual de Google Drive (agrega directo con /api/stream)
+      else if (fileId) {
+        const streamUrl = `${window.location.origin}/api/stream?id=${encodeURIComponent(fileId)}`;
+        const nameGuess = `Drive Track (${fileId.substring(0, 8)})`;
+        const t = {
+          id: ++uid,
+          name: nameGuess,
+          url: streamUrl,
+          dur: undefined,
+          isDrive: true,
+          driveId: fileId
+        };
+        tracks.push(t);
+        persist(t);
+        addedCount++;
+      } else {
+        // Enlace genérico o no reconocido
+        $("drivestatus").textContent = "Enlace no reconocido como Google Drive.";
+      }
+    }
+
+    if (addedCount > 0) {
+      $("drivestatus").textContent = `✔ ${addedCount} pista(s) agregada(s)`;
+      render();
+      if (cur === -1) select(tracks.length - addedCount, true);
+    }
+  };
+
+  /* ---------- Local Files & Folders ---------- */
   function addFiles(fileList) {
     const files = [...fileList].filter((f) => f.type.startsWith("audio/") || AUDIO_RE.test(f.name));
     if (!files.length) { say("No se encontraron archivos de audio."); return; }
@@ -1321,156 +451,39 @@ El backend Vercel extraerá todas las pistas reales y las streameará directamen
     if (cur === -1) select(0, false);
   }
 
-  function render() {
-    listEl.innerHTML = "";
-    if (!tracks.length) {
-      const li = document.createElement("li");
-      li.className = "empty";
-      li.textContent = "— La lista está vacía —";
-      listEl.appendChild(li);
-    }
-    tracks.forEach((t, i) => {
-      const li = document.createElement("li");
-      li.className = "t" + (i === cur ? " act" : "");
-      const m = document.createElement("button");
-      m.className = "m";
-      m.title = "Reproducir pista";
-      
-      const tagHtml = t.isDrive ? '<span class="tag">VERCEL</span>' : '';
-      m.innerHTML = `<span class="n">${i + 1}.</span>${tagHtml}<span class="tt">${t.name}</span><span class="d">${fmt(t.dur)}</span>`;
-      m.addEventListener("click", () => select(i, true));
-
-      const x = document.createElement("button");
-      x.className = "x";
-      x.textContent = "✕";
-      x.setAttribute("aria-label", "Quitar " + t.name);
-      x.addEventListener("click", (e) => {
-        e.stopPropagation();
-        remove(i);
-      });
-
-      li.append(m, x);
-      listEl.appendChild(li);
-    });
-
-    $("cnt").textContent = tracks.length + " pistas";
-    $("clear").disabled = !tracks.length;
-    updateTotal();
-    const a = listEl.querySelector(".act");
-    if (a) a.scrollIntoView({ block: "nearest" });
-  }
-
-  function updateTotal() {
-    const sum = tracks.reduce((s, t) => s + (t.dur || 0), 0);
-    $("tot").textContent = fmt(audio.currentTime || 0) + "/" + fmt(audio.duration) + (sum ? " · " + fmt(sum) : "");
-  }
-
-  function setTitle() {
-    const t = tracks[cur];
-    const prefix = t && t.isDrive ? "[VERCEL STREAM] " : "";
-    setMarquee(t ? `${cur + 1}. ${prefix}${t.name}` : "DRIVE-AMP — agregá archivos o pegá una carpeta pública de Drive");
-  }
-
-  function select(i, autoplay) {
-    if (i < 0 || i >= tracks.length) return;
-    cur = i;
-    store.set("cur", tracks[i].id);
-
-    const track = tracks[i];
-    if (track.isDrive) {
-      $("kbps").textContent = "VERCEL PROXY / STREAM";
-      $("kbps").style.color = "var(--green)";
-      audio.crossOrigin = "anonymous";
-      // Actualizar la URL de streaming usando la base actual
-      if (track.driveId) {
-        audio.src = getStreamEndpoint(track.driveId);
-      } else {
-        audio.src = track.url;
-      }
-    } else {
-      $("kbps").textContent = "OFFLINE NATIVO";
-      $("kbps").style.color = "var(--dim)";
-      audio.removeAttribute("crossorigin");
-      audio.src = track.url;
-    }
-
-    audio.load();
-    setTitle();
-    render();
-    if (autoplay) play();
-  }
-
-  function remove(i) {
-    if (tracks[i].blob && tracks[i].url) URL.revokeObjectURL(tracks[i].url);
-    DB.del(tracks[i].id).catch(() => {});
-    const wasCur = i === cur;
-    tracks.splice(i, 1);
-    if (wasCur) {
-      audio.pause();
-      audio.removeAttribute("src");
-      audio.load();
-      cur = -1;
-      setState();
-      setTitle();
-    } else if (i < cur) {
-      cur--;
-    }
-    render();
-  }
-
-  function clearAll() {
-    tracks.forEach((t) => { if (t.blob && t.url) URL.revokeObjectURL(t.url); });
-    DB.clear().catch(() => {});
-    store.set("cur", null);
-    tracks = [];
-    cur = -1;
-    audio.pause();
-    audio.removeAttribute("src");
-    audio.load();
-    setState();
-    setTitle();
-    render();
-    $("time").textContent = "0:00";
-    $("dur").textContent = "--:--";
-    $("kbps").textContent = "VERCEL PROXY / READY";
-  }
-
-  /* ---------- Audio Engine & Visualizer ---------- */
-  let ctx = null, analyser = null, audioSource = null;
+  /* ---------- Transport & Web Audio Engine ---------- */
+  let ctx = null, analyser = null;
   function ensureCtx() {
-    if (!ctx) {
-      try {
-        ctx = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = ctx.createAnalyser();
-        analyser.fftSize = 128;
-        analyser.smoothingTimeConstant = 0.75;
-        audioSource = ctx.createMediaElementSource(audio);
-        audioSource.connect(analyser);
-        analyser.connect(ctx.destination);
-      } catch (e) {
-        analyser = null;
-      }
-    }
-    if (ctx && ctx.state === "suspended") {
-      ctx.resume();
+    if (ctx) { if (ctx.state === "suspended") ctx.resume(); return; }
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = ctx.createAnalyser(); analyser.fftSize = 128; analyser.smoothingTimeConstant = 0.75;
+      
+      // Permitir streaming de audio cross-origin sin bloquear AudioContext
+      audio.crossOrigin = "anonymous";
+      const source = ctx.createMediaElementSource(audio);
+      source.connect(analyser); 
+      analyser.connect(ctx.destination);
+    } catch (e) {
+      console.warn("Web Audio Context error:", e);
+      // Fallback para reproducir audio directo si createMediaElementSource falla por CORS
     }
   }
 
   function play() {
-    if (!tracks.length) {
-      $("fileIn").click();
-      return;
-    }
-    if (cur === -1) {
-      select(0, true);
-      return;
-    }
+    if (!tracks.length) { $("toggledrive").click(); return; }
+    if (cur === -1) { select(0, true); return; }
     ensureCtx();
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise.catch((err) => {
-        const track = tracks[cur];
-        say(`Error al reproducir audio de "${track ? track.name : ''}": ${err.message}`);
+    const promise = audio.play();
+    if (promise !== undefined) {
+      promise.catch((err) => {
+        console.warn("Play error:", err);
+        // Si falla por CORS con AudioContext, reintentar sin procesador de audio
+        if (audio.crossOrigin) {
+          audio.removeAttribute("crossorigin");
+          audio.load();
+          audio.play().catch(e => say("No se pudo reproducir este audio. Verifica que sea público."));
+        }
       });
     }
   }
@@ -1478,20 +491,13 @@ El backend Vercel extraerá todas las pistas reales y las streameará directamen
   function next() {
     if (!tracks.length) return;
     let n;
-    if (shuffle && tracks.length > 1) {
-      n = cur;
-      while (n === cur) n = Math.floor(Math.random() * tracks.length);
-    } else {
-      n = (cur + 1) % tracks.length;
-    }
+    if (shuffle && tracks.length > 1) { n = cur; while (n === cur) n = Math.floor(Math.random() * tracks.length); }
+    else n = (cur + 1) % tracks.length;
     select(n, true);
   }
 
   function prev() {
-    if (audio.currentTime > 3) {
-      audio.currentTime = 0;
-      return;
-    }
+    if (audio.currentTime > 3) { audio.currentTime = 0; return; }
     if (!tracks.length) return;
     select((cur - 1 + tracks.length) % tracks.length, true);
   }
@@ -1512,10 +518,8 @@ El backend Vercel extraerá todas las pistas reales y las streameará directamen
   $("clear").onclick = clearAll;
 
   const paintToggles = () => {
-    $("shuf").classList.toggle("on", shuffle);
-    $("shuf").setAttribute("aria-pressed", shuffle);
-    $("rep").classList.toggle("on", repeat);
-    $("rep").setAttribute("aria-pressed", repeat);
+    $("shuf").classList.toggle("on", shuffle); $("shuf").setAttribute("aria-pressed", shuffle);
+    $("rep").classList.toggle("on", repeat); $("rep").setAttribute("aria-pressed", repeat);
   };
   $("shuf").onclick = () => { shuffle = !shuffle; store.set("shuffle", shuffle); paintToggles(); };
   $("rep").onclick = () => { repeat = !repeat; store.set("repeat", repeat); paintToggles(); };
@@ -1523,12 +527,8 @@ El backend Vercel extraerá todas las pistas reales y las streameará directamen
   $("fileIn").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
   $("dirIn").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
   $("seek").oninput = (e) => { audio.currentTime = Number(e.target.value); };
-
-  const setVol = (v) => {
-    audio.volume = v;
-    $("vol").value = v;
-    $("volv").textContent = Math.round(v * 100) + "%";
-  };
+  
+  const setVol = (v) => { audio.volume = v; $("vol").value = v; $("volv").textContent = Math.round(v * 100) + "%"; };
   $("vol").oninput = (e) => { setVol(Number(e.target.value)); store.set("vol", audio.volume); };
   setVol(0.8);
 
@@ -1537,19 +537,12 @@ El backend Vercel extraerá todas las pistas reales y las streameará directamen
     $("seek").value = audio.currentTime;
     updateTotal();
   });
-
   audio.addEventListener("loadedmetadata", () => {
     const d = audio.duration;
-    $("seek").max = isFinite(d) ? d : 0;
-    $("seek").disabled = !isFinite(d);
+    $("seek").max = isFinite(d) ? d : 0; $("seek").disabled = !isFinite(d);
     $("dur").textContent = fmt(d);
-    if (tracks[cur] && isFinite(d)) {
-      tracks[cur].dur = d;
-      persist(tracks[cur]);
-      render();
-    }
+    if (tracks[cur] && isFinite(d)) { tracks[cur].dur = d; persist(tracks[cur]); render(); }
   });
-
   audio.addEventListener("play", setState);
   audio.addEventListener("pause", setState);
   audio.addEventListener("ended", () => {
@@ -1557,72 +550,41 @@ El backend Vercel extraerá todas las pistas reales y las streameará directamen
     if (!repeat && !shuffle && cur === tracks.length - 1) { setState(); return; }
     next();
   });
-
   audio.addEventListener("error", () => {
-    const track = tracks[cur];
-    if (track) {
-      say(`Error en el stream de "${track.name}". Verifica el endpoint /api/stream o la conexión.`);
-      $("kbps").textContent = "STREAM ERROR";
-      $("kbps").style.color = "#ff4a3d";
-    }
+    if (tracks[cur]) say('No se pudo reproducir "' + tracks[cur].name + '". Verifica que el enlace de Drive sea público.');
   });
 
-  /* ---------- Visualizador Real de Canvas (19 Barras de Audio) ---------- */
+  /* ---------- Visualizer (Real Web Audio Spectrum) ---------- */
   const cv = $("viz"), g = cv.getContext("2d");
   const BARS = 19, peak = new Array(BARS).fill(0);
-
   function draw() {
     requestAnimationFrame(draw);
-    const w = cv.clientWidth * (window.devicePixelRatio || 1);
-    const h = cv.clientHeight * (window.devicePixelRatio || 1);
+    const w = cv.clientWidth * (window.devicePixelRatio || 1), h = cv.clientHeight * (window.devicePixelRatio || 1);
     if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
     g.clearRect(0, 0, cv.width, cv.height);
-
     let data = null;
-    if (analyser && !audio.paused) {
-      try {
-        data = new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteFrequencyData(data);
-      } catch (e) {
-        data = null;
-      }
-    }
-    const gap = 2 * (window.devicePixelRatio || 1);
-    const bw = (cv.width - gap * (BARS - 1)) / BARS;
-
+    if (analyser && !audio.paused) { data = new Uint8Array(analyser.frequencyBinCount); analyser.getByteFrequencyData(data); }
+    const gap = 2 * (window.devicePixelRatio || 1), bw = (cv.width - gap * (BARS - 1)) / BARS;
     for (let i = 0; i < BARS; i++) {
       let v = 0;
-      if (data && data.some(x => x > 0)) {
-        const lo = Math.floor(Math.pow(i / BARS, 1.6) * (data.length * 0.8));
-        const hi = Math.max(lo + 1, Math.floor(Math.pow((i + 1) / BARS, 1.6) * (data.length * 0.8)));
-        let s = 0;
-        for (let k = lo; k < hi; k++) s += data[k];
-        v = s / (hi - lo) / 255;
+      if (data) {
+        const lo = Math.floor(Math.pow(i / BARS, 1.6) * (data.length * 0.8)), hi = Math.max(lo + 1, Math.floor(Math.pow((i + 1) / BARS, 1.6) * (data.length * 0.8)));
+        let s = 0; for (let k = lo; k < hi; k++) s += data[k]; v = s / (hi - lo) / 255;
       }
-
       peak[i] = Math.max(v, peak[i] - 0.015);
-      const bh = Math.max(2, v * cv.height);
-      const x = i * (bw + gap);
+      const bh = Math.max(2, v * cv.height), x = i * (bw + gap);
       const grad = g.createLinearGradient(0, cv.height, 0, 0);
-      grad.addColorStop(0, "#00e000");
-      grad.addColorStop(0.6, "#00e000");
-      grad.addColorStop(1, "#ff9d00");
-      g.fillStyle = grad;
-      g.fillRect(x, cv.height - bh, bw, bh);
-
-      if (peak[i] > 0.03) {
-        g.fillStyle = "#ff9d00";
-        g.fillRect(x, cv.height - peak[i] * cv.height - 2, bw, 2);
-      }
+      grad.addColorStop(0, "#00e000"); grad.addColorStop(0.6, "#00e000"); grad.addColorStop(1, "#ff9d00");
+      g.fillStyle = grad; g.fillRect(x, cv.height - bh, bw, bh);
+      if (peak[i] > 0.03) { g.fillStyle = "#ff9d00"; g.fillRect(x, cv.height - peak[i] * cv.height - 2, bw, 2); }
     }
   }
   draw();
 
   /* ---------- Drag & Drop ---------- */
   async function readEntries(entry, out) {
-    if (entry.isFile) {
-      await new Promise((r) => entry.file((f) => { out.push(f); r(); }, r));
-    } else if (entry.isDirectory) {
+    if (entry.isFile) { await new Promise((r) => entry.file((f) => { out.push(f); r(); }, r)); }
+    else if (entry.isDirectory) {
       const reader = entry.createReader();
       for (;;) {
         const batch = await new Promise((r) => reader.readEntries(r, () => r([])));
@@ -1640,70 +602,35 @@ El backend Vercel extraerá todas las pistas reales y las streameará directamen
     const items = [...(e.dataTransfer.items || [])];
     const out = [];
     if (items.length && items[0].webkitGetAsEntry) {
-      for (const it of items) {
-        const en = it.webkitGetAsEntry();
-        if (en) await readEntries(en, out);
-      }
-    } else {
-      out.push(...e.dataTransfer.files);
-    }
+      for (const it of items) { const en = it.webkitGetAsEntry(); if (en) await readEntries(en, out); }
+    } else out.push(...e.dataTransfer.files);
     addFiles(out);
   });
 
-  /* ---------- Atajos de Teclado ---------- */
+  /* ---------- Keyboard Shortcuts ---------- */
   document.addEventListener("keydown", (e) => {
-    if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName) && e.target.type !== "range") return;
-    if (e.code === "Space" && e.target.tagName !== "BUTTON") {
-      e.preventDefault();
-      audio.paused ? play() : audio.pause();
-    }
+    if (/INPUT|TEXTAREA/.test(e.target.tagName) && e.target.type !== "range") return;
+    if (e.code === "Space" && e.target.tagName !== "BUTTON") { e.preventDefault(); audio.paused ? play() : audio.pause(); }
     if (e.code === "ArrowRight" && e.target.type !== "range") audio.currentTime += 5;
     if (e.code === "ArrowLeft" && e.target.type !== "range") audio.currentTime -= 5;
   });
 
-  /* ---------- Inicialización y Restauración ---------- */
-  loadConfig();
+  /* ---------- Restore Session ---------- */
   setVol(store.get("vol", 0.8));
   shuffle = !!store.get("shuffle", false);
   repeat = !!store.get("repeat", false);
   paintToggles();
   render();
 
-  const isDriveOpen = store.get("drivePanelOpen", true);
-  if (!isDriveOpen) {
-    driveWin.classList.add("collapsed");
-    driveToggle.classList.remove("open");
-    $("driveMinBtn").textContent = "+";
-  }
-
-  const isSearchOpen = store.get("searchPanelOpen", false);
-  if (isSearchOpen) {
-    searchWin.classList.remove("collapsed");
-    searchToggle.classList.add("open");
-    searchToggle.setAttribute("aria-expanded", "true");
-    $("searchMinBtn").textContent = "−";
-  }
-
-  const isConfigOpen = store.get("configPanelOpen", false);
-  if (isConfigOpen) {
-    configWin.classList.remove("collapsed");
-    cfgToggle.classList.add("open");
-    $("configMinBtn").textContent = "−";
-  }
-
   DB.all().then((recs) => {
     if (!recs || !recs.length || tracks.length) return;
     recs.sort((a, b) => a.id - b.id);
     for (const r of recs) {
-      tracks.push({
-        id: r.id,
-        name: r.name,
-        url: r.blob ? URL.createObjectURL(r.blob) : (r.driveId ? getStreamEndpoint(r.driveId) : r.url),
-        dur: r.dur,
-        blob: r.blob || null,
-        isDrive: !!r.isDrive,
-        driveId: r.driveId || null
-      });
+      let resolvedUrl = r.url;
+      if (r.blob) {
+        resolvedUrl = URL.createObjectURL(r.blob);
+      }
+      tracks.push({ id: r.id, name: r.name, url: resolvedUrl, dur: r.dur, blob: r.blob, isDrive: !!r.isDrive, driveId: r.driveId });
       uid = Math.max(uid, r.id);
     }
     const savedId = store.get("cur", null);
@@ -1711,9 +638,7 @@ El backend Vercel extraerá todas las pistas reales y las streameará directamen
     render();
     select(idx, false);
   }).catch(() => {});
-
-  // Test de ping inicial rápido
-  testEndpoint();
 })();
 </script>
-</body></html>
+</body>
+</html>
