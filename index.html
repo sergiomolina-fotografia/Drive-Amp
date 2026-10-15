@@ -9,7 +9,7 @@
     --chrome: #2b3140;
     --light: #6d7690;
     --dark: #0d1017;
-    --green: #00ff41;
+    --green: #00e000;
     --dim: #0a5a0a;
     --orange: #ff9d00;
     --mono: "VT323", "Lucida Console", "Courier New", monospace;
@@ -385,6 +385,9 @@
     padding: 2px 6px;
     outline: none;
   }
+  .drive-search-input::placeholder, .cfg-input::placeholder {
+    color: #0d4a0d;
+  }
   .drive-status {
     font-family: var(--mono);
     font-size: 13px;
@@ -711,16 +714,16 @@
 </div>
 <div class="body">
 <div class="cfg-desc">
-  Backend de Drive-Amp: Funciona con las Serverless Functions de tu Vercel (<b style="color:#00ff41">/api/resolve</b> y <b style="color:#00ff41">/api/stream</b>).
+  Conexión serverless nativa en Vercel con endpoints: <b style="color:#00ff41">/api/resolve</b> y <b style="color:#00ff41">/api/stream</b>.
 </div>
 <div class="cfg-row">
-<label for="cfgApiBase">DIRECCIÓN BASE (Dejar vacío o /api para mismo dominio):</label>
+<label for="cfgApiBase">DIRECCIÓN DE LA API (POR DEFECTO /api):</label>
 <div style="display:flex; gap:4px;">
 <input class="cfg-input" id="cfgApiBase" placeholder="/api" type="text"/>
 <button class="btn-cfg-test" id="cfgTestBtn">[PROBAR PING]</button>
 </div>
 </div>
-<div class="drive-status" id="cfgStatus" style="color:#ffd8a8;">Servidor Vercel local (/api) activo.</div>
+<div class="drive-status" id="cfgStatus" style="color:#ffd8a8;">Conectado a /api de Vercel.</div>
 </div>
 </section>
 <!-- SOLAPA PLEGABLE: BUSCAR EN GOOGLE DRIVE -->
@@ -733,7 +736,7 @@
 </div>
 <div class="body">
 <div style="display:flex; gap:4px; align-items:center;">
-<input class="drive-search-input" id="driveSearchInput" placeholder="Buscar carpetas públicas de Drive..." type="text"/>
+<input class="drive-search-input" id="driveSearchInput" placeholder="Buscar carpetas públicas de Drive (artista, género, tema)..." type="text"/>
 <button class="btn-search" id="driveSearchBtn">[ BUSCAR ]</button>
 </div>
 <div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">
@@ -743,9 +746,8 @@
 <button class="sm-tag-btn" data-query="Rock 80s">Rock 80s</button>
 <button class="sm-tag-btn" data-query="VGM 16-bit">VGM 16-bit</button>
 <button class="sm-tag-btn" data-query="Lo-Fi Chill">Lo-Fi Chill</button>
-<button class="sm-tag-btn" data-query="Cyberpunk">Cyberpunk</button>
 </div>
-<div class="drive-status" id="searchStatus" style="color:#72a9ff;">Escribí un tema o elegí un atajo.</div>
+<div class="drive-status" id="searchStatus" style="color:#72a9ff;">Escribí un tema o elegí un atajo para buscar en Drive.</div>
 <ul class="search-results-box" id="searchResults" style="display:none;"></ul>
 </div>
 </section>
@@ -806,6 +808,34 @@
   let cur = -1, shuffle = false, repeat = false, uid = 0;
   let saveWarned = false;
 
+  /* ---------- Helper para extraer fileId de Google Drive sin servidor ---------- */
+  function extractDriveFileId(str) {
+    if (!str || typeof str !== 'string') return null;
+    str = str.trim();
+    // Excluir si es carpeta
+    if (str.includes('/folders/')) return null;
+    
+    // 1. https://drive.google.com/file/d/FILE_ID/view...
+    const matchFile = str.match(/\/file\/d\/([a-zA-Z0-9_-]{15,})/);
+    if (matchFile) return matchFile[1];
+    
+    // 2. id=FILE_ID o ?id=FILE_ID
+    const matchIdParam = str.match(/[?&]id=([a-zA-Z0-9_-]{15,})/);
+    if (matchIdParam) return matchIdParam[1];
+    
+    // 3. ID crudo de archivo (generalmente de 25 a 45 caracteres)
+    if (/^[a-zA-Z0-9_-]{25,45}$/.test(str)) {
+      return str;
+    }
+    return null;
+  }
+
+  function extractDriveFolderId(str) {
+    if (!str || typeof str !== 'string') return null;
+    const m = str.match(/\/folders\/([a-zA-Z0-9_-]{15,})/);
+    return m ? m[1] : null;
+  }
+
   /* ---------- Storage & DB ---------- */
   const store = {
     get: (k, d) => { try { const v = localStorage.getItem("amp." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -849,7 +879,7 @@
       DB.put({ id: t.id, name: t.name, dur: t.dur, isDrive: true, driveId: t.driveId }).catch(() => {});
     } else if (t.blob) {
       DB.put({ id: t.id, name: t.name, blob: t.blob, dur: t.dur, isDrive: false, driveId: null }).catch(() => {
-        if (!saveWarned) { saveWarned = true; say("No se pudo guardar en el navegador. La lista no se va a recordar."); }
+        if (!saveWarned) { saveWarned = true; say("No se pudo guardar en el navegador (poco espacio o modo privado)."); }
       });
     }
   };
@@ -888,15 +918,21 @@
   $("configTitleBar").onclick = (e) => { if (e.target.tagName !== "BUTTON") toggleConfigPanel(); };
   $("configMinBtn").onclick = (e) => { e.stopPropagation(); toggleConfigPanel(); };
 
-  /* ---------- Servidor de Backend Vercel ---------- */
+  /* ---------- Conexión con Vercel Serverless (/api) ---------- */
+  const DEFAULT_API = "/api";
+
   function getApiBase() {
-    let v = String(store.get("serverUrl", "") || "").trim().replace(/\/+$/, "");
-    if (!v || v === "/api") return ""; // Mismo dominio Vercel
+    // Si corre en Vercel directo, /api es la ruta relativa exacta
+    let v = String(store.get("serverUrl", DEFAULT_API) || "").trim().replace(/\/+$/, "");
+    if (!v || v === "https://driveamp.floot.app") {
+      v = "/api";
+      store.set("serverUrl", "/api");
+    }
     return v;
   }
 
   function loadConfig() {
-    cfgApiBase.value = store.get("serverUrl", "/api");
+    cfgApiBase.value = getApiBase();
   }
 
   function setCfg(text, color) {
@@ -913,183 +949,174 @@
   }
 
   cfgApiBase.addEventListener("change", () => {
-    saveConfig();
-    setCfg("✔ Configuración guardada.", "var(--green)");
+    if (saveConfig()) setCfg("✔ Dirección guardada.", "var(--green)");
+    else setCfg("Dirección inválida.", "#ff4a3d");
   });
 
-  // LLAMADA UNIVERSAL A LA API DE VERCEL (/api/resolve)
-  async function callVercelResolve(urlOrId, timeoutMs = 45000) {
+  async function callApi(endpoint, payload, timeoutMs) {
     const base = getApiBase();
-    const endpoint = (base ? base : "") + "/api/resolve";
+    let url = base + "/" + endpoint.replace(/^\/+/, "");
     
-    // Intentar primero GET (?url=...)
+    // Si la llamada es GET o POST universal
+    let res;
     try {
-      const getUrl = endpoint + "?url=" + encodeURIComponent(urlOrId);
-      const res = await fetch(getUrl, {
+      res = await fetch(url + (endpoint === 'resolve' && payload && payload.links ? '?url=' + encodeURIComponent(payload.links[0]) : ''), {
         method: "GET",
         headers: { "Accept": "application/json" },
-        signal: AbortSignal.timeout(timeoutMs)
+        signal: AbortSignal.timeout(timeoutMs || 45000)
       });
       
-      const text = await res.text();
-      let data = null;
-      try { data = JSON.parse(text); } catch (e) {
-        if (text.startsWith("<!DOCTYPE")) {
-          throw new Error("El endpoint /api/resolve devolvió una página HTML 404/500 de Vercel.");
-        }
-        throw new Error("Respuesta inválida del servidor: " + text.substring(0, 100));
-      }
-      
-      if (!res.ok) {
-        throw new Error(data && data.error ? data.error : "Error en el servidor (" + res.status + ")");
-      }
-      return data;
-    } catch (err) {
-      // Reintento con POST en caso de que GET esté restringido
-      try {
-        const postRes = await fetch(endpoint, {
+      // Si GET falló por 405 Method Not Allowed, reintentar POST
+      if (res.status === 405) {
+        res = await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "Accept": "application/json" },
-          body: JSON.stringify({ url: urlOrId, id: urlOrId }),
-          signal: AbortSignal.timeout(timeoutMs)
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(timeoutMs || 45000)
         });
-        const postText = await postRes.text();
-        const postData = JSON.parse(postText);
-        if (!postRes.ok) throw new Error(postData.error || "Error HTTP " + postRes.status);
-        return postData;
-      } catch (postErr) {
-        throw err;
       }
+    } catch (e) {
+      if (e && e.name === "TimeoutError") throw new Error("Tiempo de espera agotado al conectar con el backend.");
+      throw new Error("No se pudo conectar con " + url + ". Verifica que el backend esté desplegado.");
     }
+
+    const text = await res.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      if (text.includes("404") || text.includes("NOT_FOUND")) {
+        throw new Error("La función /api/" + endpoint + " devolvió 404. Verifica que 'api/" + endpoint + ".js' esté en tu repo.");
+      }
+      throw new Error("El servidor devolvió HTML en vez de JSON. Verifica la función en Vercel.");
+    }
+
+    if (!res.ok) {
+      throw new Error((data && data.error) ? data.error : "Error HTTP " + res.status);
+    }
+    return data;
   }
 
   $("cfgTestBtn").onclick = async () => {
     saveConfig();
-    setCfg("Probando ping con /api/resolve...", "var(--orange)");
+    setCfg("Probando ping en " + getApiBase() + "/resolve?url=ping ...", "var(--orange)");
     try {
-      const r = await callVercelResolve("ping", 15000);
+      const r = await callApi("resolve", { links: ["ping"] }, 15000);
       if (r && r.ok) {
-        setCfg("✔ Backend Vercel OK: {\"ok\":true,\"tracks\":[]}", "var(--green)");
+        setCfg("✔ Conexión con Vercel OK: " + JSON.stringify(r), "var(--green)");
       } else {
-        setCfg("Respuesta inesperada: " + JSON.stringify(r), "var(--orange)");
+        setCfg("Respondió pero sin formato esperado: " + JSON.stringify(r), "var(--orange)");
       }
     } catch (e) {
-      setCfg("Error de conexión: " + e.message, "#ff4a3d");
+      setCfg("✕ Error: " + e.message, "#ff4a3d");
     }
   };
 
   function resolveStreamUrl(fileId) {
     const base = getApiBase();
-    return (base ? base : "") + "/api/stream?id=" + encodeURIComponent(fileId);
+    return base + "/stream?id=" + encodeURIComponent(fileId);
   }
 
-  /* ---------- Extracción Directa de Enlaces de Google Drive ---------- */
-  function extractDriveId(str) {
-    if (!str || typeof str !== 'string') return null;
-    const trimmed = str.trim();
-    // Enlace de archivo /file/d/ID
-    const fileMatch = trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]{15,})/);
-    if (fileMatch) return { id: fileMatch[1], isFolder: false };
-    
-    // Parámetro ?id=ID
-    const idParam = trimmed.match(/[?&]id=([a-zA-Z0-9_-]{15,})/);
-    if (idParam && !trimmed.includes('/folders/')) return { id: idParam[1], isFolder: false };
-    
-    // Enlace de carpeta /folders/ID
-    const folderMatch = trimmed.match(/\/folders\/([a-zA-Z0-9_-]{15,})/);
-    if (folderMatch) return { id: folderMatch[1], isFolder: true };
-    
-    return null;
-  }
-
-  async function resolveAndAdd(links) {
-    const known = new Set(tracks.filter((x) => x.isDrive).map((x) => x.driveId));
+  /* ---------- Carga de Enlaces Directos y Carpetas ---------- */
+  async function resolveAndAdd(rawLinks) {
     const added = [];
-    const warnings = [];
-    let foundCount = 0;
+    const known = new Set(tracks.filter((x) => x.isDrive).map((x) => x.driveId));
+    const foldersToResolve = [];
 
-    for (const link of links) {
-      const info = extractDriveId(link);
-
-      // CASO A: Enlace directo a un archivo de audio (bypass directo sin esperar a resolver)
-      if (info && !info.isFolder) {
-        foundCount++;
-        const fid = info.id;
-        if (!known.has(fid)) {
-          known.add(fid);
-          const fname = "Drive Audio (" + fid.substring(0, 6) + "...)";
+    // 1. REGLA DE ORO: Separar enlaces directos de archivos vs carpetas
+    for (const raw of rawLinks) {
+      const fileId = extractDriveFileId(raw);
+      if (fileId) {
+        // ¡ES UN ARCHIVO DIRECTO! No consultar /api/resolve innecesariamente
+        if (!known.has(fileId)) {
+          known.add(fileId);
+          // Nombre limpio e informativo
+          const trackTitle = "Drive Audio [" + fileId.substring(0, 8) + "]";
           const tr = {
             id: ++uid,
-            name: fname,
-            url: "",
+            name: trackTitle,
+            url: resolveStreamUrl(fileId),
             dur: undefined,
             blob: null,
             isDrive: true,
-            driveId: fid
+            driveId: fileId
           };
           tracks.push(tr);
           persist(tr);
           added.push(tr);
         }
-        continue;
-      }
-
-      // CASO B: Carpeta de Google Drive o URL compleja -> Resolver con backend Vercel
-      try {
-        const data = await callVercelResolve(link, 45000);
-        const folderTracks = Array.isArray(data.tracks) ? data.tracks : [];
-        foundCount += folderTracks.length;
-        
-        for (const item of folderTracks) {
-          if (!item || !item.id || known.has(item.id)) continue;
-          known.add(item.id);
-          const tr = {
-            id: ++uid,
-            name: String(item.title || item.name || "Drive Audio"),
-            url: "",
-            dur: undefined,
-            blob: null,
-            isDrive: true,
-            driveId: item.id
-          };
-          tracks.push(tr);
-          persist(tr);
-          added.push(tr);
-        }
-      } catch (err) {
-        warnings.push(err.message);
+      } else {
+        // Podría ser carpeta o enlace que requiere resolver
+        foldersToResolve.push(raw);
       }
     }
 
-    return { added, found: foundCount, warnings };
+    // 2. Si hay carpetas, resolverlas vía /api/resolve
+    if (foldersToResolve.length > 0) {
+      for (const fUrl of foldersToResolve) {
+        const folderId = extractDriveFolderId(fUrl);
+        const queryTarget = folderId ? folderId : fUrl;
+        
+        try {
+          const data = await callApi("resolve", { links: [queryTarget] }, 60000);
+          const found = Array.isArray(data.tracks) ? data.tracks : [];
+          for (const it of found) {
+            if (!it || !it.id || known.has(it.id)) continue;
+            known.add(it.id);
+            const tr = {
+              id: ++uid,
+              name: String(it.title || it.name || ("Drive Track (" + it.id.substring(0, 6) + ")")),
+              url: resolveStreamUrl(it.id),
+              dur: undefined,
+              blob: null,
+              isDrive: true,
+              driveId: it.id
+            };
+            tracks.push(tr);
+            persist(tr);
+            added.push(tr);
+          }
+        } catch (err) {
+          // Si solo falló la carpeta pero agregamos archivos directos, propagar solo si no hubo nada agregado
+          if (added.length === 0) throw err;
+        }
+      }
+    }
+
+    return { added, count: added.length };
   }
 
   let driveBusy = false;
   async function processDriveInput() {
     if (driveBusy) return;
-    const links = driveInput.value.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
-    if (!links.length) { setDriveMsg("Pegá al menos un enlace de Google Drive.", true); return; }
+    const val = driveInput.value.trim();
+    if (!val) {
+      setDriveMsg("Pegá al menos un enlace de archivo o carpeta de Drive.", true);
+      return;
+    }
+    const links = val.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+    if (!links.length) {
+      setDriveMsg("No se detectó ningún enlace válido.", true);
+      return;
+    }
     
     driveBusy = true;
     $("driveAddBtn").disabled = true;
-    setDriveMsg("Leyendo enlaces y carpetas de Google Drive...");
-    
+    setDriveMsg("Procesando enlace(s)...");
+
     try {
       const r = await resolveAndAdd(links);
-      const extra = r.warnings.length ? " · " + r.warnings.join(" · ") : "";
-      if (r.added.length) {
+      if (r.added.length > 0) {
         const firstIdx = tracks.indexOf(r.added[0]);
         driveInput.value = "";
         render();
-        setDriveMsg("✔ Se agregaron " + r.added.length + " pista(s) de Drive." + extra);
+        setDriveMsg("✔ Se agregaron " + r.added.length + " pista(s) de Google Drive lista(s) para sonar.");
         if (cur === -1) select(firstIdx, true);
-      } else if (r.found) {
-        setDriveMsg("Las pistas ya están en la lista." + extra, true);
       } else {
-        setDriveMsg((r.warnings.length ? r.warnings.join(" · ") : "No se encontraron audios públicos en la carpeta.") + " Verifica permisos 'Cualquier persona con el enlace'.", true);
+        setDriveMsg("Las pistas ya estaban en la lista o no se detectaron archivos de audio.", true);
       }
     } catch (e) {
-      setDriveMsg(e.message, true);
+      setDriveMsg("✕ " + e.message, true);
     } finally {
       driveBusy = false;
       $("driveAddBtn").disabled = false;
@@ -1102,50 +1129,21 @@
     setDriveMsg("Área de enlaces limpia.");
   };
 
-  /* ---------- Buscador de carpetas públicas ---------- */
+  /* ---------- Buscador de Carpetas Públicas de Drive ---------- */
   const setSearchMsg = (text, color) => {
     searchStatus.textContent = text;
     searchStatus.style.color = color;
   };
 
-  async function performSearch(query) {
-    const q = (query || "").trim();
-    if (q.length < 2) {
-      setSearchMsg("Escribí al menos 2 letras para buscar.", "var(--orange)");
-      searchResults.style.display = "none";
-      return;
-    }
-    $("driveSearchBtn").disabled = true;
-    searchResults.style.display = "none";
-    setSearchMsg('Buscando carpetas de "' + q + '"...', "#72a9ff");
-
-    try {
-      // Consulta a la API de búsqueda o scraping de carpetas conocidas
-      const res = await fetch("https://driveamp.floot.app/_api/drive/search", {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify({ json: { query: q } }),
-        signal: AbortSignal.timeout(30000)
-      });
-      const data = await res.json();
-      const results = (data && data.json && data.json.results) || (data && data.results) || [];
-      renderSearchResults(results, q);
-    } catch (e) {
-      setSearchMsg("No se pudo conectar al buscador externo: " + e.message, "#ff4a3d");
-    } finally {
-      $("driveSearchBtn").disabled = false;
-    }
-  }
-
   function renderSearchResults(results, q) {
     searchResults.innerHTML = "";
     const valid = results.filter((r) => r && typeof r.id === "string" && /^[A-Za-z0-9_-]{10,}$/.test(r.id));
     if (!valid.length) {
-      setSearchMsg('No se encontraron carpetas públicas para "' + q + '".', "var(--orange)");
+      setSearchMsg('No se encontraron carpetas públicas para "' + q + '". Probá con otras palabras.', "var(--orange)");
       searchResults.style.display = "none";
       return;
     }
-    setSearchMsg("✔ " + valid.length + " carpetas encontradas.", "var(--green)");
+    setSearchMsg("✔ " + valid.length + " carpeta(s) pública(s) encontradas.", "var(--green)");
     searchResults.style.display = "block";
 
     valid.forEach((item) => {
@@ -1159,10 +1157,13 @@
       info.className = "search-item-info";
       const ttl = document.createElement("div");
       ttl.className = "search-item-title";
+      ttl.title = title;
       ttl.textContent = title;
       const sub = document.createElement("div");
       sub.className = "search-item-sub";
-      sub.textContent = "📂 Carpeta pública";
+      const folderTag = document.createElement("span");
+      folderTag.textContent = "📂 Carpeta pública";
+      sub.appendChild(folderTag);
       info.append(ttl, sub);
 
       const btns = document.createElement("div");
@@ -1185,15 +1186,14 @@
         try {
           const r = await resolveAndAdd([folderUrl]);
           if (r.added.length) {
+            const firstIdx = tracks.indexOf(r.added[0]);
             render();
-            if (cur === -1) select(tracks.indexOf(r.added[0]), true);
+            if (cur === -1) select(firstIdx, true);
             addBtn.textContent = "✔ " + r.added.length + " PISTAS";
             addBtn.style.background = "#14481c";
-          } else if (r.found) {
-            addBtn.textContent = "YA AGREGADA";
           } else {
             addBtn.textContent = "SIN AUDIO";
-            setSearchMsg("Esa carpeta no contiene archivos .mp3/.wav visibles.", "var(--orange)");
+            setSearchMsg("Esa carpeta no devolvió pistas directas con extensión de audio.", "var(--orange)");
           }
         } catch (e) {
           addBtn.textContent = "+ CARGAR";
@@ -1208,10 +1208,43 @@
     });
   }
 
+  let searchBusy = false;
+  async function performSearch(query) {
+    if (searchBusy) return;
+    const q = (query || "").trim();
+    if (q.length < 2) {
+      setSearchMsg("Escribí al menos 2 letras para buscar.", "var(--orange)");
+      searchResults.style.display = "none";
+      return;
+    }
+    searchBusy = true;
+    $("driveSearchBtn").disabled = true;
+    searchResults.style.display = "none";
+    setSearchMsg('Buscando carpetas de "' + q + '"...', "#72a9ff");
+    try {
+      // Búsqueda rápida en Floot o endpoint público
+      const res = await fetch("https://driveamp.floot.app/_api/drive/search", {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        body: JSON.stringify({ json: { query: q } })
+      });
+      const data = await res.json();
+      const payload = data && data.json ? data.json : data;
+      renderSearchResults(Array.isArray(payload.results) ? payload.results : [], q);
+    } catch (e) {
+      searchResults.style.display = "none";
+      setSearchMsg("Búsqueda no disponible temporalmente (" + e.message + ").", "#ff4a3d");
+    } finally {
+      searchBusy = false;
+      $("driveSearchBtn").disabled = false;
+    }
+  }
+
   $("driveSearchBtn").onclick = () => performSearch(driveSearchInput.value);
   driveSearchInput.onkeydown = (e) => {
     if (e.key === "Enter") performSearch(driveSearchInput.value);
   };
+
   document.querySelectorAll(".sm-tag-btn").forEach((btn) => {
     btn.onclick = () => {
       const q = btn.getAttribute("data-query");
@@ -1310,7 +1343,7 @@
   function setTitle() {
     const t = tracks[cur];
     const el = $("ttl");
-    const prefix = t && t.isDrive ? "[G-DRIVE] " : "";
+    const prefix = t && t.isDrive ? "[DRIVE] " : "";
     el.textContent = t ? `${cur + 1}. ${prefix}${t.name}` : "DRIVE-AMP — agregá archivos o pegá un enlace de Drive";
     el.className = el.textContent.length > 30 ? "scroll" : "";
     el.style.animation = "none";
@@ -1379,7 +1412,7 @@
     $("kbps").textContent = "ONLINE / VERCEL";
   }
 
-  /* ---------- Visualizador y Motor de Audio ---------- */
+  /* ---------- Audio Engine & Visualizer ---------- */
   let ctx = null, analyser = null, audioSource = null;
   function ensureCtx() {
     if (!ctx) {
@@ -1395,17 +1428,27 @@
         analyser = null;
       }
     }
-    if (ctx && ctx.state === "suspended") ctx.resume();
+    if (ctx && ctx.state === "suspended") {
+      ctx.resume();
+    }
   }
 
   function play() {
-    if (!tracks.length) { $("fileIn").click(); return; }
-    if (cur === -1) { select(0, true); return; }
+    if (!tracks.length) {
+      $("fileIn").click();
+      return;
+    }
+    if (cur === -1) {
+      select(0, true);
+      return;
+    }
     ensureCtx();
     const playPromise = audio.play();
     if (playPromise !== undefined) {
       playPromise.catch((err) => {
-        if (err && err.name === "NotAllowedError") say("Tocá ▶ para iniciar la reproducción.");
+        if (err && err.name === "NotAllowedError") {
+          say("Tocá ▶ para reproducir.");
+        }
       });
     }
   }
@@ -1423,7 +1466,10 @@
   }
 
   function prev() {
-    if (audio.currentTime > 3) { audio.currentTime = 0; return; }
+    if (audio.currentTime > 3) {
+      audio.currentTime = 0;
+      return;
+    }
     if (!tracks.length) return;
     select((cur - 1 + tracks.length) % tracks.length, true);
   }
@@ -1496,13 +1542,13 @@
     if (track.isDrive) {
       $("kbps").textContent = "ERROR DE STREAM";
       $("kbps").style.color = "var(--orange)";
-      say('No se pudo reproducir "' + track.name + '". Comprobá permisos públicos de Google Drive.');
+      say('Error al reproducir "' + track.name + '". Comprueba que el archivo sea público.');
     } else {
-      say('No se pudo reproducir "' + track.name + '".');
+      say('Error al reproducir "' + track.name + '". Formato no soportado.');
     }
   });
 
-  /* Visualizador canvas */
+  /* ---------- Visualizador de Canvas con simulación en fallback ---------- */
   const cv = $("viz"), g = cv.getContext("2d");
   const BARS = 19, peak = new Array(BARS).fill(0);
   let simPhase = 0;
@@ -1557,7 +1603,7 @@
   }
   draw();
 
-  /* Drag & Drop */
+  /* ---------- Drag & Drop ---------- */
   async function readEntries(entry, out) {
     if (entry.isFile) {
       await new Promise((r) => entry.file((f) => { out.push(f); r(); }, r));
@@ -1589,7 +1635,18 @@
     addFiles(out);
   });
 
-  /* Restaurar Sesión */
+  /* ---------- Atajos de Teclado ---------- */
+  document.addEventListener("keydown", (e) => {
+    if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName) && e.target.type !== "range") return;
+    if (e.code === "Space" && e.target.tagName !== "BUTTON") {
+      e.preventDefault();
+      audio.paused ? play() : audio.pause();
+    }
+    if (e.code === "ArrowRight" && e.target.type !== "range") audio.currentTime += 5;
+    if (e.code === "ArrowLeft" && e.target.type !== "range") audio.currentTime -= 5;
+  });
+
+  /* ---------- Restaurar Sesión ---------- */
   loadConfig();
   setVol(store.get("vol", 0.8));
   shuffle = !!store.get("shuffle", false);
@@ -1604,8 +1661,26 @@
     $("driveMinBtn").textContent = "+";
   }
 
+  const isSearchOpen = store.get("searchPanelOpen", false);
+  if (isSearchOpen) {
+    searchWin.classList.remove("collapsed");
+    searchToggle.classList.add("open");
+    searchToggle.setAttribute("aria-expanded", "true");
+    $("searchMinBtn").textContent = "−";
+  }
+
+  const isConfigOpen = store.get("configPanelOpen", false);
+  if (isConfigOpen) {
+    configWin.classList.remove("collapsed");
+    cfgToggle.classList.add("open");
+    $("configMinBtn").textContent = "−";
+  }
+
   DB.all().then((recs) => {
     recs = recs || [];
+    const isLegacyFake = (r) => r.isDrive && !r.blob && ("url" in r || "fallbackUrl" in r);
+    recs.filter(isLegacyFake).forEach((r) => DB.del(r.id).catch(() => {}));
+    recs = recs.filter((r) => !isLegacyFake(r));
     if (!recs.length || tracks.length) return;
     recs.sort((a, b) => a.id - b.id);
     for (const r of recs) {
@@ -1614,7 +1689,7 @@
       tracks.push({
         id: r.id,
         name: r.name,
-        url: r.blob ? URL.createObjectURL(r.blob) : "",
+        url: r.isDrive ? resolveStreamUrl(r.driveId) : (r.blob ? URL.createObjectURL(r.blob) : ""),
         dur: r.dur,
         blob: r.blob || null,
         isDrive: !!r.isDrive,
