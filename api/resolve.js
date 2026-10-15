@@ -16,20 +16,19 @@
   </style>
 </head>
 <body>
-<!-- STITCH_THREEJS_START:ANIMATION_31 class="fixed inset-0 w-full h-full bg-transparent" -->
+<!-- STITCH_THREEJS_START:ANIMATION_32 class="fixed inset-0 w-full h-full bg-transparent" -->
 <div class="fixed inset-0 w-full h-full bg-transparent" style="display:block;">
 <script src="https://ajax.googleapis.com/ajax/libs/threejs/r125/three.min.js"></script>
-<div id="threejs-container-ANIMATION_31" style="width:100%;height:100%"></div>
+<div id="threejs-container-ANIMATION_32" style="width:100%;height:100%"></div>
 <script>
 (function() {
-  const container = document.getElementById('threejs-container-ANIMATION_31');
+  const container = document.getElementById('threejs-container-ANIMATION_32');
   const devicePixelRatio = window.devicePixelRatio || 1;
   // api/resolve.js
 // Parser universal y robusto para Google Drive en Vercel Serverless
-// Compatible con peticiones GET (/api/resolve?url=...), POST (/api/resolve) y formato Floot
+// Compatible con GET (?url=... / ?id=...), POST { url / id / links } y formato Floot { json: { links } }
 
 module.exports = async function handler(req, res) {
-  // Configuración de cabeceras CORS universales
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
@@ -38,7 +37,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // 1. Extraer entrada ya sea de GET (?url= o ?id=) o POST (body json o text plano)
+  // 1. Extraer enlace o ID de GET o POST
   let url = req.query.url;
   let id = req.query.id;
 
@@ -53,19 +52,18 @@ module.exports = async function handler(req, res) {
       if (body.links && Array.isArray(body.links) && body.links.length > 0) {
         url = body.links[0];
       }
-      // Soporte para formato Floot { json: { links: [...] } }
       if (body.json && body.json.links && Array.isArray(body.json.links) && body.json.links.length > 0) {
         url = body.json.links[0];
       }
     }
   }
 
-  // Comprobación de ping
+  // Soporte para ping de verificación
   if (url === 'ping' || id === 'ping') {
     return res.status(200).json({ ok: true, tracks: [] });
   }
 
-  // 2. Extraer ID de archivo o carpeta
+  // 2. Extraer fileId o folderId con Regex permisivo
   let fileId = null;
   let folderId = null;
 
@@ -79,20 +77,30 @@ module.exports = async function handler(req, res) {
       fileId = fileMatch[1];
     } else {
       const genericMatch = url.match(/([a-zA-Z0-9_-]{25,})/);
-      if (genericMatch) folderId = genericMatch[1];
+      if (genericMatch) {
+        folderId = genericMatch[1];
+      }
     }
   } else if (id) {
-    folderId = id;
+    if (id.length < 25 && !url) {
+      fileId = id;
+    } else {
+      folderId = id;
+    }
   }
 
-  // Caso 1: Archivo individual de Google Drive
+  // ==========================================
+  // CASO 1: Archivo individual de Google Drive
+  // ==========================================
   if (fileId) {
+    // Si viene nombre por query o default
+    const fileName = req.query.name || ('Google Drive Audio (' + fileId.substring(0, 6) + '...)');
     return res.status(200).json({
       type: 'file',
       tracks: [{
         id: fileId,
-        title: 'Google Drive Audio (' + fileId.substring(0, 6) + '...)',
-        name: 'Google Drive Audio (' + fileId.substring(0, 6) + '...)',
+        title: fileName,
+        name: fileName,
         streamUrl: `/api/stream?id=${fileId}`
       }]
     });
@@ -102,7 +110,9 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'No se reconoció un enlace o ID válido de Google Drive.' });
   }
 
-  // Caso 2: Carpeta de Google Drive - Scraping con User-Agent de navegador
+  // ==========================================
+  // CASO 2: Carpeta de Google Drive (Scraping)
+  // ==========================================
   try {
     const embedUrl = `https://drive.google.com/embeddedfolderview?id=${encodeURIComponent(folderId)}#list`;
     const response = await fetch(embedUrl, {
@@ -182,7 +192,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Si no encontró pistas con extensión de audio
+    // Si no encontró pistas
     return res.status(404).json({
       error: 'No se encontraron pistas de audio visibles en la carpeta. Verifica que los archivos tengan extensión (.mp3, .wav, etc.) y estén directamente en la raíz de la carpeta compartida.'
     });
@@ -195,6 +205,6 @@ module.exports = async function handler(req, res) {
 })();
 </script>
 </div>
-<!-- STITCH_THREEJS_END:ANIMATION_31 -->
+<!-- STITCH_THREEJS_END:ANIMATION_32 -->
 </body>
 </html>
