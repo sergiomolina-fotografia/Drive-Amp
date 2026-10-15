@@ -300,6 +300,19 @@
     border-bottom-color: #72a9ff;
     color: #8bbaff;
   }
+  .title.net-title {
+    background: linear-gradient(180deg, #4a2b6b, #24113b);
+    cursor: pointer;
+  }
+  .net-btn.open {
+    background: #25173a;
+    border-color: #000;
+    border-right-color: #c08bff;
+    border-bottom-color: #c08bff;
+    color: #c9a3ff;
+  }
+  #netWin { transition: all 0.2s ease; }
+  .m .tag.net { background: #2b1747; color: #c9a3ff; border-color: #5b3a8c; }
   .cfg-btn {
     height: 20px;
     padding: 0 6px;
@@ -361,7 +374,7 @@
   #driveWin, #searchWin, #configWin {
     transition: all 0.2s ease;
   }
-  #driveWin.collapsed, #searchWin.collapsed, #configWin.collapsed {
+  #driveWin.collapsed, #searchWin.collapsed, #configWin.collapsed, #netWin.collapsed {
     display: none;
   }
   .drive-input-box {
@@ -672,6 +685,7 @@
 <body>
 <div class="stack" id="app">
 <audio id="audio" preload="metadata"></audio>
+<audio id="audioNet" preload="metadata"></audio>
 <!-- VENTANA PRINCIPAL DEL REPRODUCTOR -->
 <section aria-label="Reproductor" class="win">
 <div class="title">
@@ -707,6 +721,7 @@
 <button aria-label="Detener" class="tb" id="stop" title="Detener">⏹</button>
 <button aria-label="Siguiente" class="tb" id="next" title="Siguiente pista">⏭</button>
 <button aria-label="Abrir archivos locales" class="tb" id="eject" title="Abrir archivos">⏏</button>
+<button aria-label="Abrir carpeta local" class="tb" id="ejectDir" title="Agregar carpeta local">📁</button>
 </div>
 <div class="tr">
 <button aria-pressed="false" class="pill" id="shuf" title="Modo aleatorio">ALEAT</button>
@@ -716,6 +731,9 @@
 </button>
 <button aria-expanded="false" class="drive-search-btn" id="searchToggle" title="Buscar carpetas o canciones públicas de Drive">
   BUSCAR DRIVE <span class="search-mark">🔍</span>
+</button>
+<button aria-expanded="false" class="drive-search-btn net-btn" id="netToggle" title="Agregar enlaces directos de otros servidores (http/https, M3U, PLS)">
+  ABRIR RED <span class="search-mark">🔗</span>
 </button>
 </div>
 </div>
@@ -774,6 +792,26 @@
 <ul class="search-results-box" id="searchResults" style="display:none;"></ul>
 </div>
 </section>
+<!-- SOLAPA PLEGABLE: ENLACES DIRECTOS DE RED -->
+<section aria-label="Enlaces directos de red" class="win collapsed" id="netWin">
+<div class="title net-title" id="netTitleBar" title="Clic para plegar/desplegar">
+<span class="search-mark">🔗</span>
+<span>ENLACES DIRECTOS (NAS, SERVIDORES, RADIOS)</span>
+<span class="grip"></span>
+<button aria-label="Plegar" class="win-btn" id="netMinBtn">+</button>
+</div>
+<div class="body">
+<textarea class="drive-input-box" id="netInput" placeholder="Pegá enlaces http:// o https:// directos a un audio, o a una lista .m3u / .pls (uno por línea)" rows="3"></textarea>
+<div class="drive-status" id="netStatus" style="color:#c9a3ff;">Pegá enlaces directos a archivos de audio.</div>
+<div class="drive-bar">
+<button class="wide btn-accent" id="netAddBtn">+ CARGAR A LISTA</button>
+<button class="wide" id="netClearBtn">LIMPIAR</button>
+</div>
+<div class="cfg-desc" style="font-size:12px; line-height:1.35;">
+Los navegadores no pueden hablar los protocolos <b>smb://</b> (Samba) ni <b>UPnP/DLNA</b> directamente. Lo que sí funciona es el enlace <b>http(s)</b> que ofrece tu servidor: Jellyfin, Navidrome, Plex, Synology/QNAP (Audio Station), Nextcloud, un servidor web, radios por internet, etc. Desde una página https, los enlaces <b>http://</b> pueden quedar bloqueados por el navegador; si pasa, usá la versión https del servidor o abrí esta página como archivo local.
+</div>
+</div>
+</section>
 <!-- SOLAPA PLEGABLE: AGREGAR ENLACE DE GOOGLE DRIVE -->
 <section aria-label="Importar de Google Drive" class="win" id="driveWin">
 <div class="title drive-title" id="driveTitleBar" title="Clic para plegar/desplegar">
@@ -817,7 +855,9 @@
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
-  const audio = $("audio"), listEl = $("list"), msgEl = $("msg");
+  const audioMain = $("audio"), audioNet = $("audioNet"), listEl = $("list"), msgEl = $("msg");
+  let audio = audioMain; // elemento activo; el de red nunca pasa por Web Audio (evita silencio por CORS)
+  const on = (ev, fn) => [audioMain, audioNet].forEach((a) => a.addEventListener(ev, (e) => { if (a === audio) fn(e); }));
   const driveWin = $("driveWin"), driveToggle = $("driveToggle");
   const searchWin = $("searchWin"), searchToggle = $("searchToggle");
   const configWin = $("configWin"), cfgToggle = $("cfgToggle");
@@ -871,7 +911,9 @@
   })();
 
   const persist = (t) => {
-    if (t.isDrive) {
+    if (t.isNet) {
+      DB.put({ id: t.id, name: t.name, dur: t.dur, isDrive: false, isNet: true, netUrl: t.url }).catch(() => {});
+    } else if (t.isDrive) {
       // Pistas de Drive: solo se guarda el ID; la dirección se arma al reproducir.
       DB.put({ id: t.id, name: t.name, dur: t.dur, isDrive: true, driveId: t.driveId }).catch(() => {});
     } else if (t.blob) {
@@ -904,6 +946,108 @@
   searchToggle.onclick = toggleSearchPanel;
   $("searchTitleBar").onclick = (e) => { if (e.target.tagName !== "BUTTON") toggleSearchPanel(); };
   $("searchMinBtn").onclick = (e) => { e.stopPropagation(); toggleSearchPanel(); };
+
+  /* ---------- Enlaces directos de red ---------- */
+  const netWin = $("netWin"), netToggle = $("netToggle"), netInput = $("netInput"), netStatus = $("netStatus");
+  function toggleNetPanel() {
+    const isCollapsed = netWin.classList.toggle("collapsed");
+    netToggle.classList.toggle("open", !isCollapsed);
+    netToggle.setAttribute("aria-expanded", String(!isCollapsed));
+    $("netMinBtn").textContent = isCollapsed ? "+" : "−";
+    store.set("netPanelOpen", !isCollapsed);
+    if (!isCollapsed) setTimeout(() => netInput.focus(), 60);
+  }
+  netToggle.onclick = toggleNetPanel;
+  $("netTitleBar").onclick = (e) => { if (e.target.tagName !== "BUTTON") toggleNetPanel(); };
+  $("netMinBtn").onclick = (e) => { e.stopPropagation(); toggleNetPanel(); };
+  const setNetMsg = (m, c) => { netStatus.textContent = m; netStatus.style.color = c || "#c9a3ff"; };
+
+  function nameFromUrl(u) {
+    try {
+      const seg = decodeURIComponent(new URL(u).pathname.split("/").filter(Boolean).pop() || new URL(u).hostname);
+      return seg.replace(AUDIO_RE, "") || u;
+    } catch (e) { return u; }
+  }
+  function parsePlaylist(text, base, isPls) {
+    const out = [];
+    const lines = String(text).split(/\r?\n/);
+    let title = "";
+    const pls = {};
+    for (const raw of lines) {
+      const l = raw.trim();
+      if (!l) continue;
+      if (isPls) {
+        const m = /^(File|Title)(\d+)=(.*)$/i.exec(l);
+        if (m) { (pls[m[2]] = pls[m[2]] || {})[m[1].toLowerCase()] = m[3].trim(); }
+      } else if (l.startsWith("#EXTINF")) {
+        title = l.includes(",") ? l.slice(l.indexOf(",") + 1).trim() : "";
+      } else if (l[0] !== "#") {
+        out.push({ url: l, title }); title = "";
+      }
+    }
+    if (isPls) Object.keys(pls).sort((a, b) => a - b).forEach((k) => { if (pls[k].file) out.push({ url: pls[k].file, title: pls[k].title || "" }); });
+    return out.map((e) => {
+      try { return { url: new URL(e.url, base).href, title: e.title }; } catch (x) { return null; }
+    }).filter(Boolean);
+  }
+  function addNetTrack(url, title) {
+    const tr = { id: ++uid, name: String(title || nameFromUrl(url)).slice(0, 200), url, dur: undefined, blob: null, isDrive: false, isNet: true };
+    tracks.push(tr);
+    persist(tr);
+    return tr;
+  }
+  async function processNetInput() {
+    const lines = netInput.value.split(/\s+/).map((s) => s.trim()).filter(Boolean);
+    if (!lines.length) { setNetMsg("Pegá al menos un enlace.", "var(--orange)"); return; }
+    const known = new Set(tracks.filter((x) => x.isNet).map((x) => x.url));
+    let added = 0, dup = 0; const problems = [];
+    const mixed = location.protocol === "https:";
+    $("netAddBtn").disabled = true;
+    try {
+      for (const raw of lines) {
+        let u;
+        try { u = new URL(raw); } catch (e) { problems.push("No es un enlace válido: " + raw.slice(0, 60)); continue; }
+        if (u.protocol === "smb:" || u.protocol === "file:" || u.protocol === "ftp:" || u.protocol === "upnp:") {
+          problems.push(u.protocol + " no se puede abrir desde un navegador. Usá el enlace http(s) de tu servidor."); continue;
+        }
+        if (u.protocol !== "http:" && u.protocol !== "https:") { problems.push("Protocolo no soportado: " + u.protocol); continue; }
+        if (u.username || u.password) { problems.push("Sin usuario/contraseña en el enlace: " + u.hostname); continue; }
+        const path = u.pathname.toLowerCase();
+        if (/\.(m3u|pls)$/.test(path)) {
+          try {
+            setNetMsg("Leyendo lista " + nameFromUrl(u.href) + "…");
+            const r = await fetch(u.href);
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            const items = parsePlaylist(await r.text(), u.href, /\.pls$/.test(path)).filter((e) => /^https?:/i.test(e.url));
+            if (!items.length) { problems.push("La lista está vacía: " + nameFromUrl(u.href)); continue; }
+            for (const e of items) { if (known.has(e.url)) { dup++; continue; } known.add(e.url); addNetTrack(e.url, e.title); added++; }
+          } catch (e) {
+            problems.push("No se pudo leer la lista " + nameFromUrl(u.href) + " (el servidor debe permitir CORS). Probá pegando los enlaces de las pistas directamente.");
+          }
+          continue;
+        }
+        if (/\.m3u8$/.test(path) && !audioNet.canPlayType("application/vnd.apple.mpegurl")) {
+          problems.push("Los streams HLS (.m3u8) no los soporta este navegador."); continue;
+        }
+        if (known.has(u.href)) { dup++; continue; }
+        known.add(u.href);
+        addNetTrack(u.href); added++;
+        if (mixed && u.protocol === "http:") problems.push("Aviso: " + u.hostname + " es http:// y esta página es https://; el navegador puede bloquearlo.");
+      }
+    } finally { $("netAddBtn").disabled = false; }
+    render();
+    if (added) {
+      netInput.value = "";
+      if (cur === -1) select(tracks.length - added, false);
+    }
+    const parts = [];
+    if (added) parts.push("✔ " + added + " pista(s) agregada(s)");
+    if (dup) parts.push(dup + " repetida(s)");
+    if (problems.length) parts.push(problems.join(" · "));
+    setNetMsg(parts.join(" — ") || "Nada para agregar.", added && !problems.length ? "var(--green)" : (problems.length ? "var(--orange)" : "#c9a3ff"));
+  }
+  $("netAddBtn").onclick = processNetInput;
+  $("netClearBtn").onclick = () => { netInput.value = ""; setNetMsg("Pegá enlaces directos a archivos de audio."); };
 
   function toggleConfigPanel() {
     const isCollapsed = configWin.classList.toggle("collapsed");
@@ -1216,7 +1360,12 @@
       nEl.className = "n";
       nEl.textContent = (i + 1) + ".";
       m.appendChild(nEl);
-      if (t.isDrive) {
+      if (t.isNet) {
+        const tag = document.createElement("span");
+        tag.className = "tag net";
+        tag.textContent = "RED";
+        m.appendChild(tag);
+      } else if (t.isDrive) {
         const tag = document.createElement("span");
         tag.className = "tag";
         tag.textContent = "DRIVE";
@@ -1260,7 +1409,7 @@
   function setTitle() {
     const t = tracks[cur];
     const el = $("ttl");
-    const prefix = t && t.isDrive ? "[G-DRIVE] " : "";
+    const prefix = t && t.isNet ? "[RED] " : (t && t.isDrive ? "[G-DRIVE] " : "");
     el.textContent = t ? `${cur + 1}. ${prefix}${t.name}` : "DRIVE-AMP — agregá archivos o pegá un enlace de Drive";
     el.className = el.textContent.length > 30 ? "scroll" : "";
     el.style.animation = "none";
@@ -1276,7 +1425,18 @@
     say("");
     const track = tracks[i];
     let src = track.url;
-    if (track.isDrive) {
+    const want = track.isNet ? audioNet : audioMain;
+    if (want !== audio) {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+      audio = want;
+    }
+    if (track.isNet) {
+      $("kbps").textContent = "ENLACE DE RED";
+      $("kbps").style.color = "#c9a3ff";
+      audio.removeAttribute("crossorigin");
+    } else if (track.isDrive) {
       src = resolveStreamUrl(track.driveId);
       $("kbps").textContent = "STREAMING DRIVE";
       $("kbps").style.color = "var(--green)";
@@ -1339,7 +1499,7 @@
         analyser = ctx.createAnalyser();
         analyser.fftSize = 128;
         analyser.smoothingTimeConstant = 0.75;
-        audioSource = ctx.createMediaElementSource(audio);
+        audioSource = ctx.createMediaElementSource(audioMain);
         audioSource.connect(analyser);
         analyser.connect(ctx.destination);
       } catch (e) {
@@ -1360,7 +1520,7 @@
       select(0, true);
       return;
     }
-    ensureCtx();
+    if (audio === audioMain) ensureCtx();
     const playPromise = audio.play();
     if (playPromise !== undefined) {
       playPromise.catch((err) => {
@@ -1406,6 +1566,7 @@
   $("eject").onclick = () => $("fileIn").click();
   $("addf").onclick = () => $("fileIn").click();
   $("addd").onclick = () => $("dirIn").click();
+  $("ejectDir").onclick = () => $("dirIn").click();
   $("clear").onclick = clearAll;
 
   const paintToggles = () => {
@@ -1422,20 +1583,21 @@
   $("seek").oninput = (e) => { audio.currentTime = Number(e.target.value); };
 
   const setVol = (v) => {
-    audio.volume = v;
+    audioMain.volume = v;
+    audioNet.volume = v;
     $("vol").value = v;
     $("volv").textContent = Math.round(v * 100) + "%";
   };
-  $("vol").oninput = (e) => { setVol(Number(e.target.value)); store.set("vol", audio.volume); };
+  $("vol").oninput = (e) => { setVol(Number(e.target.value)); store.set("vol", audioMain.volume); };
   setVol(0.8);
 
-  audio.addEventListener("timeupdate", () => {
+  on("timeupdate", () => {
     $("time").textContent = fmt(audio.currentTime);
     $("seek").value = audio.currentTime;
     updateTotal();
   });
 
-  audio.addEventListener("loadedmetadata", () => {
+  on("loadedmetadata", () => {
     const d = audio.duration;
     $("seek").max = isFinite(d) ? d : 0;
     $("seek").disabled = !isFinite(d);
@@ -1447,18 +1609,22 @@
     }
   });
 
-  audio.addEventListener("play", setState);
-  audio.addEventListener("pause", setState);
-  audio.addEventListener("ended", () => {
+  on("play", setState);
+  on("pause", setState);
+  on("ended", () => {
     if (repeat && tracks.length === 1) { audio.currentTime = 0; audio.play(); return; }
     if (!repeat && !shuffle && cur === tracks.length - 1) { setState(); return; }
     next();
   });
 
-  audio.addEventListener("error", () => {
+  on("error", () => {
     const track = tracks[cur];
     if (!track) return;
-    if (track.isDrive) {
+    if (track.isNet) {
+      $("kbps").textContent = "ERROR DE RED";
+      $("kbps").style.color = "var(--orange)";
+      say('No se pudo reproducir "' + track.name + '". Revisá que el enlace sea directo a un audio, que el servidor esté encendido y accesible desde este dispositivo, y que no sea http:// desde una página https://.');
+    } else if (track.isDrive) {
       $("kbps").textContent = "ERROR DE STREAM";
       $("kbps").style.color = "var(--orange)";
       say('No se pudo reproducir "' + track.name + '". Verificá que el archivo siga siendo público y que el servidor (' + getApiBase() + ") esté activo.");
@@ -1480,7 +1646,7 @@
     g.clearRect(0, 0, cv.width, cv.height);
 
     let data = null;
-    if (analyser && !audio.paused) {
+    if (analyser && audio === audioMain && !audio.paused) {
       try {
         data = new Uint8Array(analyser.frequencyBinCount);
         analyser.getByteFrequencyData(data);
@@ -1589,6 +1755,13 @@
     $("searchMinBtn").textContent = "−";
   }
 
+  if (store.get("netPanelOpen", false)) {
+    netWin.classList.remove("collapsed");
+    netToggle.classList.add("open");
+    netToggle.setAttribute("aria-expanded", "true");
+    $("netMinBtn").textContent = "−";
+  }
+
   const isConfigOpen = store.get("configPanelOpen", false);
   if (isConfigOpen) {
     configWin.classList.remove("collapsed");
@@ -1607,14 +1780,16 @@
     recs.sort((a, b) => a.id - b.id);
     for (const r of recs) {
       if (r.isDrive && !r.driveId) continue;
-      if (!r.isDrive && !r.blob) continue;
+      if (r.isNet && !/^https?:/i.test(r.netUrl || "")) continue;
+      if (!r.isDrive && !r.isNet && !r.blob) continue;
       tracks.push({
         id: r.id,
         name: r.name,
-        url: r.blob ? URL.createObjectURL(r.blob) : "",
+        url: r.isNet ? r.netUrl : (r.blob ? URL.createObjectURL(r.blob) : ""),
         dur: r.dur,
         blob: r.blob || null,
         isDrive: !!r.isDrive,
+        isNet: !!r.isNet,
         driveId: r.driveId || null
       });
       uid = Math.max(uid, r.id);
