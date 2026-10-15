@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Drive-Amp - Archivos de Despliegue Vercel</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet"/>
+<style>
+  body { font-family: 'JetBrains Mono', monospace; }
+  .winamp-border {
+    border-top: 2px solid #5a5f78;
+    border-left: 2px solid #5a5f78;
+    border-right: 2px solid #10121a;
+    border-bottom: 2px solid #10121a;
+  }
+  .winamp-well {
+    border-top: 2px solid #10121a;
+    border-left: 2px solid #10121a;
+    border-right: 2px solid #5a5f78;
+    border-bottom: 2px solid #5a5f78;
+  }
+</style>
+</head>
+<body class="bg-[#0b0c10] text-[#c5c6c7] p-4 md:p-8 min-h-screen flex flex-col items-center">
+
+  <div class="w-full max-w-4xl bg-[#1f2833] winamp-border shadow-2xl p-4 md:p-6 mb-8">
+    <!-- Header -->
+    <div class="flex items-center justify-between bg-gradient-to-r from-[#192231] via-[#283852] to-[#192231] px-4 py-2 text-[#66fcf1] border-b border-[#45a29e] mb-6">
+      <div class="flex items-center space-x-2">
+        <span class="inline-block w-3 h-3 bg-[#00ff41] rounded-full animate-pulse"></span>
+        <span class="font-bold tracking-widest text-sm md:text-base">DRIVE-AMP // ARCHIVOS PARA DEPLOY EN VERCEL</span>
+      </div>
+      <span class="text-xs text-[#45a29e]">ESTRUCTURA LISTA PARA COPIAR</span>
+    </div>
+
+    <p class="text-xs md:text-sm text-gray-300 mb-6 leading-relaxed">
+      Crea estos 4 archivos en tu repositorio de GitHub para que Vercel ejecute automáticamente los endpoints sin bloqueos CORS y sirva el reproductor en tiempo real:
+    </p>
+
+    <!-- Pestañas / Archivos -->
+    <div class="space-y-6">
+
+      <!-- 1. vercel.json -->
+      <div class="bg-[#12161f] winamp-border p-4">
+        <div class="flex justify-between items-center mb-2 pb-2 border-b border-gray-800">
+          <div class="flex items-center space-x-2">
+            <span class="text-[#f5a623] font-bold text-sm">📄 vercel.json</span>
+            <span class="text-[10px] bg-[#1a2332] text-gray-400 px-2 py-0.5 rounded">Raíz del proyecto</span>
+          </div>
+          <button onclick="navigator.clipboard.writeText(document.getElementById('code-vercel').innerText); this.innerText='¡COPIADO! ✅'; setTimeout(()=>this.innerText='COPIAR 📋', 2000)" class="text-xs bg-[#24334a] hover:bg-[#344966] text-[#66fcf1] px-3 py-1 winamp-border active:translate-y-px">
+            COPIAR 📋
+          </button>
+        </div>
+        <pre id="code-vercel" class="text-xs text-[#00ff41] bg-black p-3 winamp-well overflow-x-auto"><code>{
+  "version": 2,
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Range" },
+        { "key": "Access-Control-Expose-Headers", "value": "Content-Range, Content-Length, Accept-Ranges" }
+      ]
+    }
+  ]
+}</code></pre>
+      </div>
+
+      <!-- 2. package.json -->
+      <div class="bg-[#12161f] winamp-border p-4">
+        <div class="flex justify-between items-center mb-2 pb-2 border-b border-gray-800">
+          <div class="flex items-center space-x-2">
+            <span class="text-[#f5a623] font-bold text-sm">📄 package.json</span>
+            <span class="text-[10px] bg-[#1a2332] text-gray-400 px-2 py-0.5 rounded">Raíz del proyecto</span>
+          </div>
+          <button onclick="navigator.clipboard.writeText(document.getElementById('code-package').innerText); this.innerText='¡COPIADO! ✅'; setTimeout(()=>this.innerText='COPIAR 📋', 2000)" class="text-xs bg-[#24334a] hover:bg-[#344966] text-[#66fcf1] px-3 py-1 winamp-border active:translate-y-px">
+            COPIAR 📋
+          </button>
+        </div>
+        <pre id="code-package" class="text-xs text-[#00ff41] bg-black p-3 winamp-well overflow-x-auto"><code>{
+  "name": "drive-amp-backend",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {}
+}</code></pre>
+      </div>
+
+      <!-- 3. api/stream.js -->
+      <div class="bg-[#12161f] winamp-border p-4">
+        <div class="flex justify-between items-center mb-2 pb-2 border-b border-gray-800">
+          <div class="flex items-center space-x-2">
+            <span class="text-[#45a29e] font-bold text-sm">⚡ api/stream.js</span>
+            <span class="text-[10px] bg-[#1a2332] text-gray-400 px-2 py-0.5 rounded">Carpeta /api/</span>
+          </div>
+          <button onclick="navigator.clipboard.writeText(document.getElementById('code-stream').innerText); this.innerText='¡COPIADO! ✅'; setTimeout(()=>this.innerText='COPIAR 📋', 2000)" class="text-xs bg-[#24334a] hover:bg-[#344966] text-[#66fcf1] px-3 py-1 winamp-border active:translate-y-px">
+            COPIAR 📋
+          </button>
+        </div>
+        <p class="text-[11px] text-gray-400 mb-2">Streaming continuo de audio con bypass de cookies de confirmación y soporte de pausas/saltos (Range):</p>
+        <pre id="code-stream" class="text-xs text-[#00ff41] bg-black p-3 winamp-well overflow-x-auto max-h-60 overflow-y-auto"><code>export default async function handler(req, res) {
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type');
+    return res.status(200).end();
+  }
+
+  const { id } = req.query;
+  if (!id || typeof id !== 'string') {
+    return res.status(400).json({ error: 'Falta el parámetro ?id de Google Drive' });
+  }
+
+  const driveUrl = `https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download&authuser=0&confirm=t`;
+
+  try {
+    const fetchHeaders = {};
+    if (req.headers.range) {
+      fetchHeaders['Range'] = req.headers.range;
+    }
+
+    const driveRes = await fetch(driveUrl, {
+      headers: fetchHeaders,
+      redirect: 'follow',
+    });
+
+    if (!driveRes.ok && driveRes.status !== 206) {
+      const altUrl = `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}&confirm=t`;
+      const altRes = await fetch(altUrl, { headers: fetchHeaders, redirect: 'follow' });
+      if (!altRes.ok && altRes.status !== 206) {
+        return res.status(driveRes.status).json({
+          error: 'No se pudo obtener el audio de Google Drive. Verifica que sea público.'
+        });
+      }
+      return pipeStream(altRes, req, res);
+    }
+
+    return pipeStream(driveRes, req, res);
+  } catch (err) {
+    console.error('Error en stream.js:', err);
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+function pipeStream(sourceRes, req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+
+  const contentType = sourceRes.headers.get('content-type') || 'audio/mpeg';
+  res.setHeader('Content-Type', contentType);
+
+  const contentLength = sourceRes.headers.get('content-length');
+  if (contentLength) res.setHeader('Content-Length', contentLength);
+
+  const contentRange = sourceRes.headers.get('content-range');
+  if (contentRange) {
+    res.setHeader('Content-Range', contentRange);
+    res.status(206);
+  } else {
+    res.status(sourceRes.status || 200);
+  }
+
+  if (sourceRes.body) {
+    const reader = sourceRes.body.getReader();
+    const pump = async () => {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) { res.end(); break; }
+          if (!res.write(value)) {
+            await new Promise(r => res.once('drain', r));
+          }
+        }
+      } catch (err) {
+        console.error('Error streaming chunk:', err);
+        res.end();
+      }
+    };
+    pump();
+  } else {
+    res.end();
+  }
+}</code></pre>
+      </div>
+
+      <!-- 4. api/resolve.js -->
+      <div class="bg-[#12161f] winamp-border p-4">
+        <div class="flex justify-between items-center mb-2 pb-2 border-b border-gray-800">
+          <div class="flex items-center space-x-2">
+            <span class="text-[#45a29e] font-bold text-sm">⚡ api/resolve.js</span>
+            <span class="text-[10px] bg-[#1a2332] text-gray-400 px-2 py-0.5 rounded">Carpeta /api/</span>
+          </div>
+          <button onclick="navigator.clipboard.writeText(document.getElementById('code-resolve').innerText); this.innerText='¡COPIADO! ✅'; setTimeout(()=>this.innerText='COPIAR 📋', 2000)" class="text-xs bg-[#24334a] hover:bg-[#344966] text-[#66fcf1] px-3 py-1 winamp-border active:translate-y-px">
+            COPIAR 📋
+          </button>
+        </div>
+        <p class="text-[11px] text-gray-400 mb-2">Lee y extrae los nombres e IDs de todas las canciones reales de cualquier carpeta pública de Google Drive:</p>
+        <pre id="code-resolve" class="text-xs text-[#00ff41] bg-black p-3 winamp-well overflow-x-auto max-h-60 overflow-y-auto"><code>export default async function handler(req, res) {
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    return res.status(200).end();
+  }
+
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  let folderId = req.query.id || (req.body && req.body.id);
+  const url = req.query.url || (req.body && req.body.url);
+
+  if (!folderId && url) {
+    const m = url.match(/folders\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (m) folderId = m[1];
+  }
+
+  const fileMatch = url && (url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/));
+  if (fileMatch && (!url.includes('/folders/'))) {
+    return res.status(200).json({
+      type: 'file',
+      tracks: [{
+        id: fileMatch[1],
+        name: 'Pista de Google Drive (' + fileMatch[1].substring(0, 6) + '...)',
+        streamUrl: `/api/stream?id=${fileMatch[1]}`
+      }]
+    });
+  }
+
+  if (!folderId) {
+    return res.status(400).json({ error: 'No se pudo identificar el ID de carpeta o archivo.' });
+  }
+
+  try {
+    const embedUrl = `https://drive.google.com/embeddedfolderview?id=${encodeURIComponent(folderId)}#list`;
+    const response = await fetch(embedUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+
+    if (!response.ok) {
+      return res.status(404).json({ error: 'Carpeta no accesible o privada. Debe estar compartida como pública.' });
+    }
+
+    const html = await response.text();
+    const tracks = [];
+    const seenIds = new Set();
+
+    const entryRegex = /id="entry-([a-zA-Z0-9_-]+)"[\s\S]*?<div class="folder-entry-name[^"]*">([^<]+)<\/div>/g;
+    let match;
+    while ((match = entryRegex.exec(html)) !== null) {
+      const id = match[1];
+      const name = match[2].trim();
+      if (!seenIds.has(id) && isAudio(name)) {
+        seenIds.add(id);
+        tracks.push({ id, name, streamUrl: `/api/stream?id=${id}` });
+      }
+    }
+
+    if (tracks.length === 0) {
+      const jsonItems = html.matchAll(/\["([a-zA-Z0-9_-]{25,})","([^"]+\.(mp3|wav|flac|ogg|m4a|aac))"/gi);
+      for (const m of jsonItems) {
+        const id = m[1];
+        const name = m[2];
+        if (!seenIds.has(id)) {
+          seenIds.add(id);
+          tracks.push({ id, name, streamUrl: `/api/stream?id=${id}` });
+        }
+      }
+    }
+
+    if (tracks.length === 0) {
+      const fallbackMatches = html.matchAll(/\/file\/d\/([a-zA-Z0-9_-]+)[^>]*>([^<]+)<\/a>/g);
+      for (const m of fallbackMatches) {
+        const id = m[1];
+        const name = m[2].trim();
+        if (!seenIds.has(id)) {
+          seenIds.add(id);
+          tracks.push({ id, name, streamUrl: `/api/stream?id=${id}` });
+        }
+      }
+    }
+
+    if (tracks.length === 0) {
+      return res.status(404).json({
+        error: 'No se encontraron pistas de audio en la carpeta. Verifica que sean públicas.'
+      });
+    }
+
+    return res.status(200).json({
+      type: 'folder',
+      folderId,
+      count: tracks.length,
+      tracks
+    });
+
+  } catch (err) {
+    console.error('Error en resolve.js:', err);
+    return res.status(500).json({ error: 'Error del servidor: ' + err.message });
+  }
+}
+
+function isAudio(filename) {
+  return /\.(mp3|wav|flac|ogg|m4a|aac|opus|webm|wma)$/i.test(filename);
+}</code></pre>
+      </div>
+
+    </div>
+
+    <!-- Guía rápida de carpetas -->
+    <div class="mt-8 pt-4 border-t border-gray-700 text-xs text-gray-400 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+      <div>📁 <strong>Estructura esperada en tu repo:</strong> <code>/vercel.json</code>, <code>/package.json</code>, <code>/api/stream.js</code>, <code>/api/resolve.js</code>, <code>/index.html</code></div>
+      <div class="text-[#00ff41]">✓ Sin API Keys requeridas</div>
+    </div>
+  </div>
+
+</body>
+</html>
