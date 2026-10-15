@@ -16,102 +16,92 @@
   </style>
 </head>
 <body>
-<!-- STITCH_THREEJS_START:ANIMATION_32 class="fixed inset-0 w-full h-full bg-transparent" -->
+<!-- STITCH_THREEJS_START:ANIMATION_34 class="fixed inset-0 w-full h-full bg-transparent" -->
 <div class="fixed inset-0 w-full h-full bg-transparent" style="display:block;">
 <script src="https://ajax.googleapis.com/ajax/libs/threejs/r125/three.min.js"></script>
-<div id="threejs-container-ANIMATION_32" style="width:100%;height:100%"></div>
+<div id="threejs-container-ANIMATION_34" style="width:100%;height:100%"></div>
 <script>
 (function() {
-  const container = document.getElementById('threejs-container-ANIMATION_32');
+  const container = document.getElementById('threejs-container-ANIMATION_34');
   const devicePixelRatio = window.devicePixelRatio || 1;
   // api/resolve.js
-// Parser universal y robusto para Google Drive en Vercel Serverless
-// Compatible con GET (?url=... / ?id=...), POST { url / id / links } y formato Floot { json: { links } }
+// Parser universal para Google Drive en Vercel Serverless
+// Devuelve SIEMPRE JSON estructurado, evitando errores de "!<DOCTYPE html>"
 
 module.exports = async function handler(req, res) {
+  // 1. Cabeceras CORS universales y Content-Type JSON estricto
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // 1. Extraer enlace o ID de GET o POST
-  let url = req.query.url;
-  let id = req.query.id;
-
-  if (req.body) {
+  // 2. Extraer parámetros tanto de GET (?url= o ?id=) como de POST body
+  let url = req.query.url || req.query.id;
+  if (!url && req.body) {
     let body = req.body;
     if (typeof body === 'string') {
       try { body = JSON.parse(body); } catch (e) {}
     }
     if (body) {
-      if (body.url) url = body.url;
-      if (body.id) id = body.id;
-      if (body.links && Array.isArray(body.links) && body.links.length > 0) {
-        url = body.links[0];
-      }
+      url = body.url || body.id;
+      if (body.links && Array.isArray(body.links) && body.links.length > 0) url = body.links[0];
       if (body.json && body.json.links && Array.isArray(body.json.links) && body.json.links.length > 0) {
         url = body.json.links[0];
       }
     }
   }
 
-  // Soporte para ping de verificación
-  if (url === 'ping' || id === 'ping') {
+  if (!url) {
+    return res.status(400).json({ error: 'Falta el parámetro de enlace o ID de Google Drive (?url= o ?id=).' });
+  }
+
+  // Soporte para ping
+  if (url === 'ping') {
     return res.status(200).json({ ok: true, tracks: [] });
   }
 
-  // 2. Extraer fileId o folderId con Regex permisivo
+  // 3. Extraer fileId o folderId
   let fileId = null;
   let folderId = null;
 
-  if (url) {
-    const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-    const folderMatch = url.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  const folderMatch = url.match(/\/folders\/([a-zA-Z0-9_-]+)/);
 
-    if (folderMatch) {
-      folderId = folderMatch[1];
-    } else if (fileMatch && !url.includes('/folders/')) {
-      fileId = fileMatch[1];
-    } else {
-      const genericMatch = url.match(/([a-zA-Z0-9_-]{25,})/);
-      if (genericMatch) {
-        folderId = genericMatch[1];
-      }
-    }
-  } else if (id) {
-    if (id.length < 25 && !url) {
-      fileId = id;
-    } else {
-      folderId = id;
-    }
+  if (folderMatch) {
+    folderId = folderMatch[1];
+  } else if (fileMatch && !url.includes('/folders/')) {
+    fileId = fileMatch[1];
+  } else {
+    const genericMatch = url.match(/([a-zA-Z0-9_-]{25,})/);
+    if (genericMatch) folderId = genericMatch[1];
   }
 
   // ==========================================
   // CASO 1: Archivo individual de Google Drive
   // ==========================================
   if (fileId) {
-    // Si viene nombre por query o default
-    const fileName = req.query.name || ('Google Drive Audio (' + fileId.substring(0, 6) + '...)');
+    const name = `Audio Drive (${fileId.substring(0, 6)}...)`;
     return res.status(200).json({
       type: 'file',
       tracks: [{
         id: fileId,
-        title: fileName,
-        name: fileName,
+        title: name,
+        name: name,
         streamUrl: `/api/stream?id=${fileId}`
       }]
     });
   }
 
   if (!folderId) {
-    return res.status(400).json({ error: 'No se reconoció un enlace o ID válido de Google Drive.' });
+    return res.status(400).json({ error: 'No se reconoció un ID o URL válida de Google Drive.' });
   }
 
   // ==========================================
-  // CASO 2: Carpeta de Google Drive (Scraping)
+  // CASO 2: Carpeta de Google Drive (Scraping de vista embebida)
   // ==========================================
   try {
     const embedUrl = `https://drive.google.com/embeddedfolderview?id=${encodeURIComponent(folderId)}#list`;
@@ -125,7 +115,7 @@ module.exports = async function handler(req, res) {
 
     if (!response.ok) {
       return res.status(404).json({
-        error: 'La carpeta es privada o no existe en Google Drive. Verifica que esté en modo "Cualquier persona con el enlace".'
+        error: 'La carpeta es privada o no existe. Verifica que esté en modo "Cualquier persona con el enlace".'
       });
     }
 
@@ -134,7 +124,7 @@ module.exports = async function handler(req, res) {
     const seenIds = new Set();
     const AUDIO_EXT = /\.(mp3|wav|flac|ogg|m4a|aac|opus|weba|wma)$/i;
 
-    // Parser Regex 1: Contenedores clásicos HTML embebido de Google Drive
+    // Regex 1: Entradas HTML clásicas de embeddedfolderview
     const entryRegex = /id="entry-([a-zA-Z0-9_-]+)"[\s\S]*?<div class="folder-entry-name[^"]*">([^<]+)<\/div>/gi;
     let match;
     while ((match = entryRegex.exec(html)) !== null) {
@@ -151,7 +141,7 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Parser Regex 2: Payloads JSON embebidos que Drive inyecta en el script window._DRIVE_IVD_
+    // Regex 2: Payloads JSON embebidos de Google Drive (window._DRIVE_IVD_)
     const jsonMatches = html.matchAll(/\["([a-zA-Z0-9_-]{25,})","([^"]+\.(mp3|wav|flac|ogg|m4a|aac|opus|weba|wma))"/gi);
     for (const m of jsonMatches) {
       const fid = m[1];
@@ -167,7 +157,7 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Parser Regex 3: Enlaces directos a archivos dentro del documento
+    // Regex 3: Enlaces directos /file/d/
     const linkMatches = html.matchAll(/\/file\/d\/([a-zA-Z0-9_-]+)[^>]*>([^<]+)<\/a>/gi);
     for (const m of linkMatches) {
       const fid = m[1];
@@ -183,7 +173,6 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // Si encontró pistas
     if (tracks.length > 0) {
       return res.status(200).json({
         type: 'folder',
@@ -192,19 +181,17 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Si no encontró pistas
     return res.status(404).json({
-      error: 'No se encontraron pistas de audio visibles en la carpeta. Verifica que los archivos tengan extensión (.mp3, .wav, etc.) y estén directamente en la raíz de la carpeta compartida.'
+      error: 'No se encontraron pistas de audio en la raíz de la carpeta. Verifica que tengan extensión (.mp3, etc.) y estén compartidas públicamente.'
     });
 
   } catch (err) {
     return res.status(500).json({ error: 'Error al consultar Google Drive: ' + err.message });
   }
 };
-
 })();
 </script>
 </div>
-<!-- STITCH_THREEJS_END:ANIMATION_32 -->
+<!-- STITCH_THREEJS_END:ANIMATION_34 -->
 </body>
 </html>
