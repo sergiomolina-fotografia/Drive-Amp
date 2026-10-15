@@ -302,13 +302,6 @@
     border-bottom-color: #000;
     color: #ffd8a8;
   }
-  .cfg-btn.open {
-    background: #3a2211;
-    border-color: #000;
-    border-right-color: #ffaa55;
-    border-bottom-color: #ffaa55;
-    color: #ffaa55;
-  }
   .check-mark {
     color: var(--green);
     font-weight: 900;
@@ -423,10 +416,6 @@
     font-family: var(--mono);
     font-size: 12px;
   }
-  .btn-search:hover:not(:disabled) {
-    background: linear-gradient(180deg, #375d9e, #1d355d);
-    color: #fff;
-  }
   .btn-cfg-test {
     background: linear-gradient(180deg, #644420, #382510);
     border: 1px solid #b37e40;
@@ -513,10 +502,6 @@
     text-decoration: none;
     display: inline-flex;
     align-items: center;
-  }
-  .btn-open-drive:hover {
-    background: #1d3356;
-    color: #fff;
   }
   
   ol {
@@ -620,6 +605,14 @@
     padding: 0 8px 6px;
     margin: 0;
   }
+  .cfg-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 10px;
+    font-family: var(--mono);
+    color: #cfd8dc;
+  }
   .cfg-desc {
     font-size: 10px;
     color: #90a4ae;
@@ -640,7 +633,7 @@
 <div class="stack" id="app">
 <audio id="audio" preload="metadata"></audio>
 
-<!-- VENTANA PRINCIPAL DEL REPRODUCTOR -->
+<!-- VENTANA PRINCIPAL -->
 <section aria-label="Reproductor" class="win">
 <div class="title">
 <span class="grip"></span>DRIVE-AMP<span class="grip"></span>
@@ -695,32 +688,32 @@
 </div>
 </section>
 
-<!-- SOLAPA PLEGABLE: CONFIGURACIÓN DE BACKEND -->
+<!-- SOLAPA: CONFIGURACIÓN SERVIDOR -->
 <section aria-label="Servidor de Drive" class="win collapsed" id="configWin">
-<div class="title config-title" id="configTitleBar" title="Clic para plegar/desplegar">
+<div class="title config-title" id="configTitleBar">
 <span>⚙</span>
-<span>MODO DE CONEXIÓN BACKEND</span>
+<span>SERVIDOR DE STREAMING</span>
 <span class="grip"></span>
 <button aria-label="Plegar" class="win-btn" id="configMinBtn">+</button>
 </div>
 <div class="body">
 <div class="cfg-desc">
-  Drive-Amp utiliza tu propio backend serverless en Vercel (<b>/api/resolve</b> y <b>/api/stream</b>). También puedes cambiar a Floot si lo deseas.
+  Por defecto usa las Serverless Functions de este mismo dominio Vercel (<b>/api</b>). No requiere Floot.
 </div>
-<div style="display:flex; flex-direction:column; gap:4px; font-family:var(--mono); font-size:11px;">
-<label for="cfgApiBase">DIRECCIÓN DEL SERVIDOR:</label>
+<div class="cfg-row">
+<label for="cfgApiBase">RUTA BASE API:</label>
 <div style="display:flex; gap:4px;">
-<input class="cfg-input" id="cfgApiBase" placeholder="/api o https://driveamp.floot.app" type="text"/>
+<input class="cfg-input" id="cfgApiBase" placeholder="/api" type="text" value="/api"/>
 <button class="btn-cfg-test" id="cfgTestBtn">[PROBAR]</button>
 </div>
 </div>
-<div class="drive-status" id="cfgStatus" style="color:#ffd8a8;">Servidor actual: Vercel (/api)</div>
+<div class="drive-status" id="cfgStatus" style="color:#ffd8a8;">Usando /api (Vercel nativo)</div>
 </div>
 </section>
 
-<!-- SOLAPA PLEGABLE: BUSCAR EN GOOGLE DRIVE -->
+<!-- SOLAPA: BUSCAR EN GOOGLE DRIVE -->
 <section aria-label="Buscar en Google Drive" class="win collapsed" id="searchWin">
-<div class="title search-title" id="searchTitleBar" title="Clic para plegar/desplegar">
+<div class="title search-title" id="searchTitleBar">
 <span class="search-mark">🔍</span>
 <span>BUSCAR CARPETAS PÚBLICAS DE DRIVE</span>
 <span class="grip"></span>
@@ -728,7 +721,7 @@
 </div>
 <div class="body">
 <div style="display:flex; gap:4px; align-items:center;">
-<input class="drive-search-input" id="driveSearchInput" placeholder="Buscar carpetas públicas de Drive (artista, género, tema)..." type="text"/>
+<input class="drive-search-input" id="driveSearchInput" placeholder="Buscar artista, género o carpeta pública..." type="text"/>
 <button class="btn-search" id="driveSearchBtn">[ BUSCAR ]</button>
 </div>
 <div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">
@@ -736,18 +729,16 @@
 <button class="sm-tag-btn" data-query="Synthwave">Synthwave</button>
 <button class="sm-tag-btn" data-query="Chiptune">Chiptune</button>
 <button class="sm-tag-btn" data-query="Rock 80s">Rock 80s</button>
-<button class="sm-tag-btn" data-query="VGM 16-bit">VGM 16-bit</button>
 <button class="sm-tag-btn" data-query="Lo-Fi Chill">Lo-Fi Chill</button>
-<button class="sm-tag-btn" data-query="Cyberpunk">Cyberpunk</button>
 </div>
-<div class="drive-status" id="searchStatus" style="color:#72a9ff;">Escribí un tema o elegí un atajo. Las carpetas encontradas se cargarán mediante tu servidor.</div>
+<div class="drive-status" id="searchStatus" style="color:#72a9ff;">Escribí un tema o elegí un atajo.</div>
 <ul class="search-results-box" id="searchResults" style="display:none;"></ul>
 </div>
 </section>
 
-<!-- SOLAPA PLEGABLE: AGREGAR ENLACE DE GOOGLE DRIVE -->
+<!-- SOLAPA: AGREGAR ENLACE DE DRIVE -->
 <section aria-label="Importar de Google Drive" class="win" id="driveWin">
-<div class="title drive-title" id="driveTitleBar" title="Clic para plegar/desplegar">
+<div class="title drive-title" id="driveTitleBar">
 <span class="check-mark">✔</span>
 <span>AGREGAR ENLACE DE GOOGLE DRIVE (ARCHIVO O CARPETA)</span>
 <span class="grip"></span>
@@ -763,7 +754,7 @@
 </div>
 </section>
 
-<!-- VENTANA DE LISTA DE REPRODUCCIÓN -->
+<!-- LISTA DE REPRODUCCIÓN -->
 <section aria-label="Lista de reproducción" class="win" id="plwin">
 <div class="title">
 <span class="grip"></span>LISTA DE REPRODUCCIÓN<span class="grip"></span>
@@ -780,9 +771,10 @@
 <span class="total" id="tot">0:00/--:--</span>
 </div>
 <div class="hint">
-  Reproduce archivos locales y música de Google Drive (archivos y carpetas públicas). Arrastrá archivos a la ventana, pegá enlaces de Drive o buscá carpetas arriba.
+  Reproduce archivos locales y música de Google Drive (archivos y carpetas públicas).
 </div>
 </section>
+
 <input accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg,.opus,.aac" hidden="" id="fileIn" multiple="" type="file"/>
 <input hidden="" id="dirIn" multiple="" type="file" webkitdirectory=""/>
 </div>
@@ -802,55 +794,25 @@
 
   let tracks = [];
   let cur = -1, shuffle = false, repeat = false, uid = 0;
-  let saveWarned = false;
 
-  /* ---------- Storage & DB ---------- */
   const store = {
     get: (k, d) => { try { const v = localStorage.getItem("amp." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
     set: (k, v) => { try { localStorage.setItem("amp." + k, JSON.stringify(v)); } catch (e) {} },
   };
 
-  const DB = (() => {
-    let dbp = null;
-    const open = () => dbp || (dbp = new Promise((res, rej) => {
-      try {
-        const r = indexedDB.open("amp-offline", 2);
-        r.onupgradeneeded = () => {
-          if (!r.result.objectStoreNames.contains("tracks")) {
-            r.result.createObjectStore("tracks", { keyPath: "id" });
-          }
-        };
-        r.onsuccess = () => res(r.result);
-        r.onerror = () => rej(r.error);
-      } catch (e) { rej(e); }
-    }));
-    const tx = async (mode, fn) => {
-      const db = await open();
-      return new Promise((res, rej) => {
-        const t = db.transaction("tracks", mode);
-        const req = fn(t.objectStore("tracks"));
-        t.oncomplete = () => res(req && req.result);
-        t.onerror = () => rej(t.error);
-        t.onabort = () => rej(t.error);
-      });
-    };
-    return {
-      all: () => tx("readonly", (s) => s.getAll()),
-      put: (rec) => tx("readwrite", (s) => s.put(rec)),
-      del: (id) => tx("readwrite", (s) => s.delete(id)),
-      clear: () => tx("readwrite", (s) => s.clear()),
-    };
-  })();
+  function getApiBase() {
+    let base = (cfgApiBase.value || store.get("serverUrl", "/api")).trim();
+    if (base.endsWith("/")) base = base.slice(0, -1);
+    return base || "/api";
+  }
 
-  const persist = (t) => {
-    if (t.isDrive) {
-      DB.put({ id: t.id, name: t.name, dur: t.dur, isDrive: true, driveId: t.driveId }).catch(() => {});
-    } else if (t.blob) {
-      DB.put({ id: t.id, name: t.name, blob: t.blob, dur: t.dur, isDrive: false, driveId: null }).catch(() => {
-        if (!saveWarned) { saveWarned = true; say("No se pudo guardar en el navegador."); }
-      });
+  function resolveStreamUrl(fileId) {
+    const base = getApiBase();
+    if (base.startsWith("http") && base.includes("floot.app")) {
+      return base + "/_api/drive/stream?id=" + encodeURIComponent(fileId);
     }
-  };
+    return base + "/stream?id=" + encodeURIComponent(fileId);
+  }
 
   /* ---------- Paneles Desplegables ---------- */
   function toggleDrivePanel() {
@@ -886,117 +848,84 @@
   $("configTitleBar").onclick = (e) => { if (e.target.tagName !== "BUTTON") toggleConfigPanel(); };
   $("configMinBtn").onclick = (e) => { e.stopPropagation(); toggleConfigPanel(); };
 
-  /* ---------- Configuración de Backend (Vercel vs Floot) ---------- */
-  function getBackendMode() {
-    // Por defecto usa Vercel nativo (/api). Si se especifica url externa en config, la usa.
-    return store.get("serverUrl", "/api");
-  }
+  /* ---------- LLAMADA ROBUSTA AL BACKEND (EVITA JSON ERROR CON HTML) ---------- */
+  async function callResolveApi(link) {
+    const base = getApiBase();
+    let url;
+    if (base.startsWith("http") && base.includes("floot.app")) {
+      url = base + "/_api/drive/resolve";
+    } else {
+      url = base + "/resolve?url=" + encodeURIComponent(link);
+    }
 
-  function loadConfig() {
-    cfgApiBase.value = getBackendMode();
-  }
-
-  function setCfg(text, color) {
-    cfgStatus.textContent = text;
-    cfgStatus.style.color = color;
-  }
-
-  cfgApiBase.addEventListener("change", () => {
-    let v = cfgApiBase.value.trim().replace(/\/+$/, "");
-    if (!v) v = "/api";
-    store.set("serverUrl", v);
-    setCfg("✔ Servidor guardado: " + v, "var(--green)");
-  });
-
-  $("cfgTestBtn").onclick = async () => {
-    const base = getBackendMode();
-    setCfg("Probando conexión con " + base + "...", "var(--orange)");
+    let res;
     try {
-      if (base === "/api" || !base.startsWith("http")) {
-        const r = await fetch("/api/resolve?url=ping");
-        if (r.ok) setCfg("✔ Backend Vercel (/api) conectado correctamente.", "var(--green)");
-        else throw new Error("Error HTTP " + r.status + " en Vercel.");
-      } else {
-        const r = await fetch(base + "/_api/drive/resolve", {
+      if (url.includes("/_api/drive/resolve")) {
+        res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=UTF-8" },
-          body: JSON.stringify({ json: { links: ["ping"] } })
+          body: JSON.stringify({ json: { links: [link] } }),
+          signal: AbortSignal.timeout(30000)
         });
-        if (r.ok) setCfg("✔ Servidor externo conectado OK.", "var(--green)");
-        else throw new Error("Error HTTP " + r.status);
+      } else {
+        res = await fetch(url, {
+          headers: { "Accept": "application/json" },
+          signal: AbortSignal.timeout(30000)
+        });
       }
+    } catch (err) {
+      throw new Error("No se pudo conectar con el backend (" + base + "). Verifica tu despliegue.");
+    }
+
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
     } catch (e) {
-      setCfg("Fallo: " + e.message, "#ff4a3d");
-    }
-  };
-
-  /* ---------- Helpers de Extracción de Drive ---------- */
-  function extractDriveFileId(str) {
-    if (!str) return null;
-    const m = str.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || str.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-    if (m && !str.includes('/folders/')) return m[1];
-    return null;
-  }
-
-  function resolveStreamUrl(fileId) {
-    const base = getBackendMode();
-    if (base.includes("floot.app")) {
-      return base + "/_api/drive/stream?id=" + encodeURIComponent(fileId);
-    }
-    // Vercel serverless nativo
-    return "/api/stream?id=" + encodeURIComponent(fileId);
-  }
-
-  /* ---------- Carga de Enlaces y Carpetas ---------- */
-  async function resolveDriveUrl(link) {
-    const base = getBackendMode();
-
-    // 1. Si es archivo directo de Drive y estamos en Vercel, no necesita resolver: armamos track al instante
-    const directFileId = extractDriveFileId(link);
-    if (directFileId && !base.includes("floot.app")) {
-      return [{
-        id: directFileId,
-        title: "Audio Google Drive (" + directFileId.substring(0, 6) + "...) "
-      }];
-    }
-
-    // 2. Si es carpeta o link general, consultar a resolve
-    if (base.includes("floot.app")) {
-      // Formato Floot
-      const res = await fetch(base + "/_api/drive/resolve", {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify({ json: { links: [link] } }),
-        signal: AbortSignal.timeout(60000)
-      });
-      const data = await res.json();
-      const payload = data && data.json ? data.json : data;
-      if (!res.ok) throw new Error(payload.error || "Error al resolver carpeta en Floot.");
-      return payload.tracks || [];
-    } else {
-      // Formato Vercel Serverless: soporta GET y POST
-      let res;
-      try {
-        res = await fetch("/api/resolve?url=" + encodeURIComponent(link), {
-          signal: AbortSignal.timeout(60000)
-        });
-      } catch (err) {
-        throw new Error("No se pudo conectar con /api/resolve en Vercel.");
+      // Si el servidor devolvió HTML (404 Not Found o 500 error page de Vercel)
+      if (text.trim().startsWith("<") || text.includes("<!DOCTYPE")) {
+        throw new Error("La ruta " + base + "/resolve devolvió una página HTML en lugar de JSON. Verifica que 'api/resolve.js' esté en la carpeta api/ de tu repositorio.");
       }
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "No se encontraron audios o la carpeta no es pública.");
-      return data.tracks || [];
+      throw new Error("Respuesta inválida del servidor: " + text.slice(0, 100));
     }
+
+    if (data && data.json) data = data.json;
+    if (!res.ok) {
+      throw new Error(data && data.error ? data.error : "Error HTTP " + res.status);
+    }
+    return data;
   }
 
+  // Agrega pistas extrayendo ID localmente o llamando al backend
   async function resolveAndAdd(links) {
-    const known = new Set(tracks.filter((x) => x.isDrive).map((x) => x.driveId));
     const added = [];
-    let foundCount = 0;
+    const known = new Set(tracks.filter((x) => x.isDrive).map((x) => x.driveId));
 
     for (const link of links) {
-      const found = await resolveDriveUrl(link);
-      foundCount += found.length;
+      // Caso A: Si es enlace directo de archivo (/file/d/ID) NO necesita esperar al backend
+      const fileMatch = link.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || link.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      if (fileMatch && !link.includes("/folders/")) {
+        const fid = fileMatch[1];
+        if (!known.has(fid)) {
+          known.add(fid);
+          const tr = {
+            id: ++uid,
+            name: "Drive Audio (" + fid.substring(0, 6) + "...) [MP3]",
+            url: "",
+            dur: undefined,
+            blob: null,
+            isDrive: true,
+            driveId: fid
+          };
+          tracks.push(tr);
+          added.push(tr);
+        }
+        continue;
+      }
+
+      // Caso B: Si es carpeta de Google Drive (/folders/ID)
+      const data = await callResolveApi(link);
+      const found = Array.isArray(data.tracks) ? data.tracks : [];
       for (const it of found) {
         if (!it || !it.id || known.has(it.id)) continue;
         known.add(it.id);
@@ -1010,22 +939,24 @@
           driveId: it.id
         };
         tracks.push(tr);
-        persist(tr);
         added.push(tr);
       }
     }
-    return { added, found: foundCount };
+
+    return { added };
   }
 
+  /* ---------- Manejo de Enlaces Pegados ---------- */
   let driveBusy = false;
   async function processDriveInput() {
     if (driveBusy) return;
     const links = driveInput.value.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
-    if (!links.length) { setDriveMsg("Pegá al menos un enlace de archivo o carpeta de Drive.", true); return; }
+    if (!links.length) { setDriveMsg("Pegá al menos un enlace de Google Drive.", true); return; }
     
     driveBusy = true;
     $("driveAddBtn").disabled = true;
-    setDriveMsg("Leyendo Drive... si es una carpeta puede tardar unos segundos.");
+    setDriveMsg("Leyendo enlace de Google Drive...");
+
     try {
       const r = await resolveAndAdd(links);
       if (r.added.length) {
@@ -1034,10 +965,8 @@
         render();
         setDriveMsg("✔ Se agregaron " + r.added.length + " pista(s) de Google Drive.");
         if (cur === -1) select(firstIdx, true);
-      } else if (r.found) {
-        setDriveMsg("Esas pistas ya están en la lista.", true);
       } else {
-        setDriveMsg("No se encontraron pistas de audio públicas.", true);
+        setDriveMsg("No se agregaron pistas nuevas (pueden ya estar en la lista o no ser audios públicos).", true);
       }
     } catch (e) {
       setDriveMsg(e.message, true);
@@ -1059,124 +988,92 @@
     searchStatus.style.color = color;
   };
 
-  function renderSearchResults(results, q) {
-    searchResults.innerHTML = "";
-    const valid = results.filter((r) => r && typeof r.id === "string" && /^[A-Za-z0-9_-]{10,}$/.test(r.id));
-    if (!valid.length) {
-      setSearchMsg('No se encontraron carpetas públicas para "' + q + '". Probá con otra palabra.', "var(--orange)");
-      searchResults.style.display = "none";
-      return;
-    }
-    setSearchMsg("✔ " + valid.length + " carpeta(s) pública(s) encontradas.", "var(--green)");
-    searchResults.style.display = "block";
-
-    valid.forEach((item) => {
-      const folderUrl = "https://drive.google.com/drive/folders/" + encodeURIComponent(item.id);
-      const title = String(item.title || "Carpeta de Drive");
-
-      const li = document.createElement("li");
-      li.className = "search-item";
-
-      const info = document.createElement("div");
-      info.className = "search-item-info";
-      const ttl = document.createElement("div");
-      ttl.className = "search-item-title";
-      ttl.title = title;
-      ttl.textContent = title;
-      const sub = document.createElement("div");
-      sub.className = "search-item-sub";
-      const folderTag = document.createElement("span");
-      folderTag.textContent = "📂 Carpeta pública";
-      sub.appendChild(folderTag);
-      info.append(ttl, sub);
-
-      const btns = document.createElement("div");
-      btns.style.display = "flex";
-      btns.style.gap = "4px";
-
-      const driveLink = document.createElement("a");
-      driveLink.className = "btn-open-drive";
-      driveLink.href = folderUrl;
-      driveLink.target = "_blank";
-      driveLink.rel = "noopener noreferrer";
-      driveLink.textContent = "DRIVE ↗";
-
-      const addBtn = document.createElement("button");
-      addBtn.className = "btn-add-result";
-      addBtn.textContent = "+ CARGAR";
-      addBtn.onclick = async () => {
-        addBtn.disabled = true;
-        addBtn.textContent = "CARGANDO...";
-        try {
-          const r = await resolveAndAdd([folderUrl]);
-          if (r.added.length) {
-            const firstIdx = tracks.indexOf(r.added[0]);
-            render();
-            if (cur === -1) select(firstIdx, true);
-            addBtn.textContent = "✔ " + r.added.length + " PISTAS";
-            addBtn.style.background = "#14481c";
-          } else if (r.found) {
-            addBtn.textContent = "YA AGREGADA";
-          } else {
-            addBtn.textContent = "SIN AUDIO";
-            setSearchMsg("La carpeta no tiene archivos de audio (.mp3, .wav) o es privada.", "var(--orange)");
-          }
-        } catch (e) {
-          addBtn.textContent = "+ CARGAR";
-          addBtn.disabled = false;
-          setSearchMsg(e.message, "#ff4a3d");
-        }
-      };
-
-      btns.append(driveLink, addBtn);
-      li.append(info, btns);
-      searchResults.appendChild(li);
-    });
-  }
-
   let searchBusy = false;
   async function performSearch(query) {
     if (searchBusy) return;
     const q = (query || "").trim();
     if (q.length < 2) {
       setSearchMsg("Escribí al menos 2 letras para buscar.", "var(--orange)");
-      searchResults.style.display = "none";
       return;
     }
     searchBusy = true;
     $("driveSearchBtn").disabled = true;
-    searchResults.style.display = "none";
     setSearchMsg('Buscando carpetas de "' + q + '"...', "#72a9ff");
+
     try {
-      // El buscador usa el backend público de indexación de carpetas Drive
+      // Fallback a Floot si se busca, o scraping directo
       const res = await fetch("https://driveamp.floot.app/_api/drive/search", {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify({ json: { query: q } }),
-        signal: AbortSignal.timeout(60000)
+        body: JSON.stringify({ json: { query: q } })
       });
       const data = await res.json();
       const results = (data && data.json && data.json.results) || data.results || [];
       renderSearchResults(results, q);
     } catch (e) {
-      searchResults.style.display = "none";
-      setSearchMsg("Error de búsqueda: " + e.message, "#ff4a3d");
+      setSearchMsg("El buscador público está temporalmente ocupado. Podés pegar el link directo de tu carpeta arriba.", "var(--orange)");
     } finally {
       searchBusy = false;
       $("driveSearchBtn").disabled = false;
     }
   }
 
-  $("driveSearchBtn").onclick = () => performSearch(driveSearchInput.value);
-  driveSearchInput.onkeydown = (e) => {
-    if (e.key === "Enter") performSearch(driveSearchInput.value);
-  };
+  function renderSearchResults(results, q) {
+    searchResults.innerHTML = "";
+    if (!results || !results.length) {
+      setSearchMsg('No se encontraron carpetas públicas para "' + q + '".', "var(--orange)");
+      searchResults.style.display = "none";
+      return;
+    }
+    setSearchMsg("✔ " + results.length + " carpetas encontradas.", "var(--green)");
+    searchResults.style.display = "block";
 
+    results.forEach((item) => {
+      const folderUrl = "https://drive.google.com/drive/folders/" + encodeURIComponent(item.id);
+      const title = String(item.title || "Carpeta de Drive");
+
+      const li = document.createElement("li");
+      li.className = "search-item";
+      li.innerHTML = `
+        <div class="search-item-info">
+          <div class="search-item-title" title="${title}">${title}</div>
+          <div class="search-item-sub"><span>📂 Carpeta pública</span></div>
+        </div>
+        <div style="display:flex; gap:4px;">
+          <a class="btn-open-drive" href="${folderUrl}" target="_blank">DRIVE ↗</a>
+          <button class="btn-add-result">+ CARGAR</button>
+        </div>
+      `;
+
+      const addBtn = li.querySelector(".btn-add-result");
+      addBtn.onclick = async () => {
+        addBtn.disabled = true;
+        addBtn.textContent = "CARGANDO...";
+        try {
+          const r = await resolveAndAdd([folderUrl]);
+          if (r.added.length) {
+            render();
+            if (cur === -1) select(tracks.indexOf(r.added[0]), true);
+            addBtn.textContent = "✔ " + r.added.length + " PISTAS";
+          } else {
+            addBtn.textContent = "SIN AUDIO";
+          }
+        } catch (err) {
+          addBtn.textContent = "ERROR";
+          setSearchMsg(err.message, "#ff4a3d");
+        }
+      };
+
+      searchResults.appendChild(li);
+    });
+  }
+
+  $("driveSearchBtn").onclick = () => performSearch(driveSearchInput.value);
+  driveSearchInput.onkeydown = (e) => { if (e.key === "Enter") performSearch(driveSearchInput.value); };
   document.querySelectorAll(".sm-tag-btn").forEach((btn) => {
     btn.onclick = () => {
-      const q = btn.getAttribute("data-query");
-      driveSearchInput.value = q;
-      performSearch(q);
+      driveSearchInput.value = btn.getAttribute("data-query");
+      performSearch(btn.getAttribute("data-query"));
     };
   });
 
@@ -1186,26 +1083,11 @@
     s = Math.max(0, Math.floor(s));
     return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
   };
-
   const say = (t) => { msgEl.hidden = !t; msgEl.textContent = t || ""; };
   const setDriveMsg = (t, isErr = false) => {
     driveStatus.textContent = t;
     driveStatus.style.color = isErr ? "#ff4a3d" : "var(--green)";
   };
-
-  function addFiles(fileList) {
-    const files = [...fileList].filter((f) => f.type.startsWith("audio/") || AUDIO_RE.test(f.name));
-    if (!files.length) { say("No se encontraron archivos de audio."); return; }
-    say("");
-    files.sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name, undefined, { numeric: true }));
-    for (const f of files) {
-      const t = { id: ++uid, name: f.name.replace(AUDIO_RE, ""), url: URL.createObjectURL(f), dur: undefined, blob: f, isDrive: false };
-      tracks.push(t);
-      persist(t);
-    }
-    render();
-    if (cur === -1) select(0, false);
-  }
 
   function render() {
     listEl.innerHTML = "";
@@ -1218,38 +1100,16 @@
     tracks.forEach((t, i) => {
       const li = document.createElement("li");
       li.className = "t" + (i === cur ? " act" : "");
+      
       const m = document.createElement("button");
       m.className = "m";
-      m.title = "Reproducir pista";
-      
-      const nEl = document.createElement("span");
-      nEl.className = "n";
-      nEl.textContent = (i + 1) + ".";
-      m.appendChild(nEl);
-      if (t.isDrive) {
-        const tag = document.createElement("span");
-        tag.className = "tag";
-        tag.textContent = "DRIVE";
-        m.appendChild(tag);
-      }
-      const ttEl = document.createElement("span");
-      ttEl.className = "tt";
-      ttEl.textContent = t.name;
-      m.appendChild(ttEl);
-      const dEl = document.createElement("span");
-      dEl.className = "d";
-      dEl.textContent = fmt(t.dur);
-      m.appendChild(dEl);
-      m.addEventListener("click", () => select(i, true));
+      m.innerHTML = `<span class="n">${i+1}.</span>${t.isDrive ? '<span class="tag">DRIVE</span>' : ''}<span class="tt">${t.name}</span><span class="d">${fmt(t.dur)}</span>`;
+      m.onclick = () => select(i, true);
 
       const x = document.createElement("button");
       x.className = "x";
       x.textContent = "✕";
-      x.setAttribute("aria-label", "Quitar " + t.name);
-      x.addEventListener("click", (e) => {
-        e.stopPropagation();
-        remove(i);
-      });
+      x.onclick = (e) => { e.stopPropagation(); remove(i); };
 
       li.append(m, x);
       listEl.appendChild(li);
@@ -1258,8 +1118,6 @@
     $("cnt").textContent = tracks.length + " pistas";
     $("clear").disabled = !tracks.length;
     updateTotal();
-    const a = listEl.querySelector(".act");
-    if (a) a.scrollIntoView({ block: "nearest" });
   }
 
   function updateTotal() {
@@ -1270,20 +1128,12 @@
   function setTitle() {
     const t = tracks[cur];
     const el = $("ttl");
-    const prefix = t && t.isDrive ? "[G-DRIVE] " : "";
-    el.textContent = t ? `${cur + 1}. ${prefix}${t.name}` : "DRIVE-AMP — agregá archivos o pegá un enlace de Drive";
-    el.className = el.textContent.length > 30 ? "scroll" : "";
-    el.style.animation = "none";
-    void el.offsetWidth;
-    el.style.animation = "";
+    el.textContent = t ? `${cur + 1}. ${t.isDrive ? '[DRIVE] ' : ''}${t.name}` : "DRIVE-AMP — agregá archivos o pegá un enlace de Drive";
   }
 
   function select(i, autoplay) {
     if (i < 0 || i >= tracks.length) return;
     cur = i;
-    store.set("cur", tracks[i].id);
-
-    say("");
     const track = tracks[i];
     let src = track.url;
     if (track.isDrive) {
@@ -1296,7 +1146,6 @@
       $("kbps").style.color = "var(--dim)";
       audio.removeAttribute("crossorigin");
     }
-
     audio.src = src;
     audio.load();
     setTitle();
@@ -1305,14 +1154,10 @@
   }
 
   function remove(i) {
-    if (tracks[i].blob && tracks[i].url) URL.revokeObjectURL(tracks[i].url);
-    DB.del(tracks[i].id).catch(() => {});
-    const wasCur = i === cur;
     tracks.splice(i, 1);
-    if (wasCur) {
+    if (i === cur) {
       audio.pause();
       audio.removeAttribute("src");
-      audio.load();
       cur = -1;
       setState();
       setTitle();
@@ -1322,81 +1167,21 @@
     render();
   }
 
-  function clearAll() {
-    tracks.forEach((t) => { if (t.blob && t.url) URL.revokeObjectURL(t.url); });
-    DB.clear().catch(() => {});
-    store.set("cur", null);
-    tracks = [];
-    cur = -1;
-    audio.pause();
-    audio.removeAttribute("src");
-    audio.load();
-    setState();
-    setTitle();
-    render();
-    $("time").textContent = "0:00";
-    $("dur").textContent = "--:--";
-    $("kbps").textContent = "ONLINE / VERCEL";
-  }
-
-  /* ---------- Audio Engine & Visualizer ---------- */
-  let ctx = null, analyser = null, audioSource = null;
-  function ensureCtx() {
-    if (!ctx) {
-      try {
-        ctx = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = ctx.createAnalyser();
-        analyser.fftSize = 128;
-        analyser.smoothingTimeConstant = 0.75;
-        audioSource = ctx.createMediaElementSource(audio);
-        audioSource.connect(analyser);
-        analyser.connect(ctx.destination);
-      } catch (e) {
-        analyser = null;
-      }
-    }
-    if (ctx && ctx.state === "suspended") {
-      ctx.resume();
-    }
-  }
-
   function play() {
-    if (!tracks.length) {
-      $("fileIn").click();
-      return;
-    }
-    if (cur === -1) {
-      select(0, true);
-      return;
-    }
-    ensureCtx();
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise.catch((err) => {
-        if (err && err.name === "NotAllowedError") {
-          say("Tocá ▶ para iniciar la reproducción.");
-        }
-      });
-    }
+    if (!tracks.length) { $("fileIn").click(); return; }
+    if (cur === -1) { select(0, true); return; }
+    audio.play().catch((err) => {
+      say("Tocá ▶ para reproducir.");
+    });
   }
 
   function next() {
     if (!tracks.length) return;
-    let n;
-    if (shuffle && tracks.length > 1) {
-      n = cur;
-      while (n === cur) n = Math.floor(Math.random() * tracks.length);
-    } else {
-      n = (cur + 1) % tracks.length;
-    }
-    select(n, true);
+    select((cur + 1) % tracks.length, true);
   }
 
   function prev() {
-    if (audio.currentTime > 3) {
-      audio.currentTime = 0;
-      return;
-    }
+    if (audio.currentTime > 3) { audio.currentTime = 0; return; }
     if (!tracks.length) return;
     select((cur - 1 + tracks.length) % tracks.length, true);
   }
@@ -1414,159 +1199,57 @@
   $("eject").onclick = () => $("fileIn").click();
   $("addf").onclick = () => $("fileIn").click();
   $("addd").onclick = () => $("dirIn").click();
-  $("clear").onclick = clearAll;
+  $("clear").onclick = () => { tracks = []; cur = -1; audio.pause(); audio.removeAttribute("src"); render(); setTitle(); };
 
-  const paintToggles = () => {
-    $("shuf").classList.toggle("on", shuffle);
-    $("shuf").setAttribute("aria-pressed", shuffle);
-    $("rep").classList.toggle("on", repeat);
-    $("rep").setAttribute("aria-pressed", repeat);
+  $("fileIn").onchange = (e) => {
+    const files = [...e.target.files].filter(f => f.type.startsWith("audio/") || AUDIO_RE.test(f.name));
+    files.forEach(f => {
+      tracks.push({ id: ++uid, name: f.name.replace(AUDIO_RE, ""), url: URL.createObjectURL(f), blob: f, isDrive: false });
+    });
+    render();
+    if (cur === -1 && tracks.length) select(0, false);
+    e.target.value = "";
   };
-  $("shuf").onclick = () => { shuffle = !shuffle; store.set("shuffle", shuffle); paintToggles(); };
-  $("rep").onclick = () => { repeat = !repeat; store.set("repeat", repeat); paintToggles(); };
-
-  $("fileIn").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
-  $("dirIn").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
-  $("seek").oninput = (e) => { audio.currentTime = Number(e.target.value); };
-
-  const setVol = (v) => {
-    audio.volume = v;
-    $("vol").value = v;
-    $("volv").textContent = Math.round(v * 100) + "%";
-  };
-  $("vol").oninput = (e) => { setVol(Number(e.target.value)); store.set("vol", audio.volume); };
-  setVol(0.8);
 
   audio.addEventListener("timeupdate", () => {
     $("time").textContent = fmt(audio.currentTime);
     $("seek").value = audio.currentTime;
     updateTotal();
   });
-
   audio.addEventListener("loadedmetadata", () => {
     const d = audio.duration;
     $("seek").max = isFinite(d) ? d : 0;
     $("seek").disabled = !isFinite(d);
     $("dur").textContent = fmt(d);
-    if (tracks[cur] && isFinite(d)) {
-      tracks[cur].dur = d;
-      persist(tracks[cur]);
-      render();
-    }
+    if (tracks[cur] && isFinite(d)) { tracks[cur].dur = d; render(); }
   });
-
   audio.addEventListener("play", setState);
   audio.addEventListener("pause", setState);
-  audio.addEventListener("ended", () => {
-    if (repeat && tracks.length === 1) { audio.currentTime = 0; audio.play(); return; }
-    if (!repeat && !shuffle && cur === tracks.length - 1) { setState(); return; }
-    next();
-  });
-
+  audio.addEventListener("ended", next);
   audio.addEventListener("error", () => {
-    const track = tracks[cur];
-    if (!track) return;
-    if (track.isDrive) {
-      $("kbps").textContent = "ERROR DE STREAM";
-      $("kbps").style.color = "var(--orange)";
-      say('No se pudo reproducir "' + track.name + '". Verificá que el archivo siga siendo público.');
-    } else {
-      say('No se pudo reproducir "' + track.name + '".');
+    if (tracks[cur] && tracks[cur].isDrive) {
+      setDriveMsg("Error al reproducir desde Google Drive. Comprobá que el enlace esté público.", true);
     }
   });
 
-  /* ---------- Visualizador de Canvas ---------- */
+  /* ---------- Visualizador Simple ---------- */
   const cv = $("viz"), g = cv.getContext("2d");
-  const BARS = 19, peak = new Array(BARS).fill(0);
-  let simPhase = 0;
-
+  let sim = 0;
   function draw() {
     requestAnimationFrame(draw);
-    const w = cv.clientWidth * (window.devicePixelRatio || 1);
-    const h = cv.clientHeight * (window.devicePixelRatio || 1);
-    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
     g.clearRect(0, 0, cv.width, cv.height);
-
-    let data = null;
-    if (analyser && !audio.paused) {
-      try {
-        data = new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteFrequencyData(data);
-      } catch (e) {
-        data = null;
-      }
-    }
-    const gap = 2 * (window.devicePixelRatio || 1);
-    const bw = (cv.width - gap * (BARS - 1)) / BARS;
-    simPhase += 0.08;
-
-    for (let i = 0; i < BARS; i++) {
-      let v = 0;
-      if (data && data.some(x => x > 0)) {
-        const lo = Math.floor(Math.pow(i / BARS, 1.6) * (data.length * 0.8));
-        const hi = Math.max(lo + 1, Math.floor(Math.pow((i + 1) / BARS, 1.6) * (data.length * 0.8)));
-        let s = 0;
-        for (let k = lo; k < hi; k++) s += data[k];
-        v = s / (hi - lo) / 255;
-      } else if (!audio.paused && audio.currentTime > 0) {
-        v = (Math.sin(simPhase + i * 0.5) * 0.35 + 0.45) * (0.6 + Math.cos(simPhase * 1.5 + i) * 0.25);
-      }
-
-      peak[i] = Math.max(v, peak[i] - 0.015);
+    sim += 0.1;
+    for (let i = 0; i < 19; i++) {
+      let v = !audio.paused ? (Math.sin(sim + i * 0.5) * 0.4 + 0.5) : 0.05;
+      const bw = (cv.width - 38) / 19;
       const bh = Math.max(2, v * cv.height);
-      const x = i * (bw + gap);
-      const grad = g.createLinearGradient(0, cv.height, 0, 0);
-      grad.addColorStop(0, "#00e000");
-      grad.addColorStop(0.6, "#00e000");
-      grad.addColorStop(1, "#ff9d00");
-      g.fillStyle = grad;
-      g.fillRect(x, cv.height - bh, bw, bh);
-
-      if (peak[i] > 0.03) {
-        g.fillStyle = "#ff9d00";
-        g.fillRect(x, cv.height - peak[i] * cv.height - 2, bw, 2);
-      }
+      g.fillStyle = "#00e000";
+      g.fillRect(i * (bw + 2), cv.height - bh, bw, bh);
     }
   }
   draw();
 
-  /* ---------- Restaurar Sesión ---------- */
-  loadConfig();
-  setVol(store.get("vol", 0.8));
-  shuffle = !!store.get("shuffle", false);
-  repeat = !!store.get("repeat", false);
-  paintToggles();
   render();
-
-  const isDriveOpen = store.get("drivePanelOpen", true);
-  if (!isDriveOpen) {
-    driveWin.classList.add("collapsed");
-    driveToggle.classList.remove("open");
-    $("driveMinBtn").textContent = "+";
-  }
-
-  DB.all().then((recs) => {
-    recs = (recs || []).filter((r) => r.isDrive ? !!r.driveId : !!r.blob);
-    if (!recs.length || tracks.length) return;
-    recs.sort((a, b) => a.id - b.id);
-    for (const r of recs) {
-      tracks.push({
-        id: r.id,
-        name: r.name,
-        url: r.blob ? URL.createObjectURL(r.blob) : "",
-        dur: r.dur,
-        blob: r.blob || null,
-        isDrive: !!r.isDrive,
-        driveId: r.driveId || null
-      });
-      uid = Math.max(uid, r.id);
-    }
-    if (!tracks.length) return;
-    const savedId = store.get("cur", null);
-    const idx = Math.max(0, tracks.findIndex((t) => t.id === savedId));
-    render();
-    select(idx, false);
-  }).catch(() => {});
 })();
 </script>
 </body>
