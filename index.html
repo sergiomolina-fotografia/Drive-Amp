@@ -320,6 +320,15 @@
   }
   #netWin { transition: all 0.2s ease; }
   .m .tag.net { background: #2b1747; color: #c9a3ff; border-color: #5b3a8c; }
+  .title.fav-title { background: linear-gradient(180deg, #7a5a10, #3d2c05); cursor: pointer; }
+  .fav-btn.open { background: #3a2c0a; border-color:#000; border-right-color:#ffd24a; border-bottom-color:#ffd24a; color:#ffd24a; }
+  #favWin { transition: all 0.2s ease; }
+  .fav-item { display:flex; align-items:center; gap:4px; padding:3px 4px; border-bottom:1px solid #1d2535; font-family:var(--mono); font-size:14px; color:#ffd24a; }
+  .fav-item .fn { flex:1; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .fav-item .fc { color:#7f95b3; font-size:12px; }
+  .fav-item button { height:20px; padding:0 6px; font-size:9px; font-weight:bold; }
+  .fav-list { max-height:220px; overflow:auto; background:#000; border:1px solid var(--dark); border-right-color:var(--light); border-bottom-color:var(--light); }
+  .fav-empty { padding:8px; color:#7f95b3; font-family:var(--mono); font-size:13px; }
   .cfg-btn {
     height: 20px;
     padding: 0 6px;
@@ -354,21 +363,6 @@
     font-size: 10px;
     white-space: nowrap;
   }
-  .sm-tag-btn {
-    height: 18px;
-    padding: 0 6px;
-    font-size: 9px;
-    background: #1a2233;
-    border: 1px solid #3d4a63;
-    border-right-color: #000;
-    border-bottom-color: #000;
-    color: #8bbaff;
-    font-family: var(--mono);
-  }
-  .sm-tag-btn:hover {
-    background: #27344e;
-    color: #fff;
-  }
   .vol {
     display: flex;
     align-items: center;
@@ -381,7 +375,7 @@
   #driveWin, #searchWin, #configWin {
     transition: all 0.2s ease;
   }
-  #driveWin.collapsed, #searchWin.collapsed, #configWin.collapsed, #netWin.collapsed {
+  #driveWin.collapsed, #searchWin.collapsed, #configWin.collapsed, #netWin.collapsed, #favWin.collapsed {
     display: none;
   }
   .drive-input-box {
@@ -742,6 +736,9 @@
 <button aria-expanded="false" class="drive-search-btn net-btn" id="netToggle" title="Agregar enlaces directos de otros servidores (http/https, M3U, PLS)">
   ABRIR RED <span class="search-mark">🔗</span>
 </button>
+<button aria-expanded="false" class="drive-search-btn fav-btn" id="favToggle" title="Guardar la lista actual y ver tus listas favoritas">
+  FAVORITOS <span class="search-mark">★</span>
+</button>
 </div>
 </div>
 <div class="vol">
@@ -786,17 +783,26 @@
 <input class="drive-search-input" id="driveSearchInput" placeholder="Buscar carpetas públicas de Drive (artista, género, tema)..." type="text"/>
 <button class="btn-search" id="driveSearchBtn">[ BUSCAR ]</button>
 </div>
-<div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">
-<span style="font-family:var(--mono); font-size:11px; color:#7f95b3;">RÁPIDO:</span>
-<button class="sm-tag-btn" data-query="Synthwave">Synthwave</button>
-<button class="sm-tag-btn" data-query="Chiptune">Chiptune</button>
-<button class="sm-tag-btn" data-query="Rock 80s">Rock 80s</button>
-<button class="sm-tag-btn" data-query="VGM 16-bit">VGM 16-bit</button>
-<button class="sm-tag-btn" data-query="Lo-Fi Chill">Lo-Fi Chill</button>
-<button class="sm-tag-btn" data-query="Cyberpunk">Cyberpunk</button>
-</div>
-<div class="drive-status" id="searchStatus" style="color:#72a9ff;">Escribí un tema o elegí un atajo. Cada búsqueda tarda unos segundos.</div>
+<div class="drive-status" id="searchStatus" style="color:#72a9ff;">Escribí un tema y buscá. Cada búsqueda tarda unos segundos.</div>
 <ul class="search-results-box" id="searchResults" style="display:none;"></ul>
+</div>
+</section>
+<!-- SOLAPA PLEGABLE: FAVORITOS -->
+<section aria-label="Listas favoritas" class="win collapsed" id="favWin">
+<div class="title fav-title" id="favTitleBar" title="Clic para plegar/desplegar">
+<span class="search-mark">★</span>
+<span>LISTAS FAVORITAS</span>
+<span class="grip"></span>
+<button aria-label="Plegar" class="win-btn" id="favMinBtn">+</button>
+</div>
+<div class="body">
+<div style="display:flex; gap:4px; align-items:center;">
+<input class="drive-search-input" id="favName" maxlength="60" placeholder="Nombre para la lista actual (ej. Rock 80s)" type="text"/>
+<button class="btn-search" id="favSaveBtn">[ ★ GUARDAR ]</button>
+</div>
+<div class="drive-status" id="favStatus" style="color:#ffd24a;">Se guardan las pistas de Drive y los enlaces de red de la lista actual.</div>
+<div class="fav-list" id="favList"></div>
+<div class="cfg-desc" style="font-size:12px; line-height:1.35;">Tus favoritos quedan guardados en este navegador y este dispositivo. Los archivos locales no se guardan en favoritos (solo Drive y enlaces de red).</div>
 </div>
 </section>
 <!-- SOLAPA PLEGABLE: ENLACES DIRECTOS DE RED -->
@@ -849,6 +855,7 @@ Los navegadores no pueden hablar los protocolos <b>smb://</b> (Samba) ni <b>UPnP
 <div class="foot">
 <button class="wide" id="addf">+ ARCHIVOS</button>
 <button class="wide" id="addd">+ CARPETA</button>
+<button class="wide" id="favSave" title="Guardar la lista actual en Favoritos">★ GUARDAR</button>
 <button class="wide" disabled="" id="clear">VACIAR</button>
 <span class="total" id="tot">0:00/--:--</span>
 </div>
@@ -1055,6 +1062,83 @@ Los navegadores no pueden hablar los protocolos <b>smb://</b> (Samba) ni <b>UPnP
   }
   $("netAddBtn").onclick = processNetInput;
   $("netClearBtn").onclick = () => { netInput.value = ""; setNetMsg("Pegá enlaces directos a archivos de audio."); };
+
+  /* ---------- Favoritos (guardados en este navegador) ---------- */
+  const favWin = $("favWin"), favToggle = $("favToggle"), favName = $("favName"), favStatus = $("favStatus"), favListEl = $("favList");
+  const setFavMsg = (m, c) => { favStatus.textContent = m; favStatus.style.color = c || "#ffd24a"; };
+  const getFavs = () => { const v = store.get("favs", []); return Array.isArray(v) ? v.filter((f) => f && typeof f.name === "string" && Array.isArray(f.items)) : []; };
+  function toggleFavPanel(force) {
+    const open = force === undefined ? favWin.classList.contains("collapsed") : force;
+    favWin.classList.toggle("collapsed", !open);
+    favToggle.classList.toggle("open", open);
+    favToggle.setAttribute("aria-expanded", String(open));
+    $("favMinBtn").textContent = open ? "−" : "+";
+    store.set("favPanelOpen", open);
+    if (open) renderFavs();
+  }
+  favToggle.onclick = () => toggleFavPanel();
+  $("favTitleBar").onclick = (e) => { if (e.target.tagName !== "BUTTON") toggleFavPanel(); };
+  $("favMinBtn").onclick = (e) => { e.stopPropagation(); toggleFavPanel(); };
+  $("favSave").onclick = () => { toggleFavPanel(true); favWin.scrollIntoView({ block: "nearest" }); setTimeout(() => favName.focus(), 60); };
+
+  function currentSavable() {
+    return tracks.filter((x) => (x.isDrive && x.driveId) || (x.isNet && /^https?:/i.test(x.url || ""))).map((x) =>
+      x.isNet ? { k: "n", url: x.url, name: x.name } : { k: "d", id: x.driveId, name: x.name });
+  }
+  function saveFav() {
+    const items = currentSavable();
+    const skipped = tracks.length - items.length;
+    if (!items.length) { setFavMsg(tracks.length ? "Solo hay archivos locales: no se pueden guardar en favoritos." : "La lista está vacía.", "var(--orange)"); return; }
+    const name = (favName.value || "").trim() || ("Lista " + new Date().toLocaleDateString());
+    const favs = getFavs();
+    const same = favs.findIndex((f) => f.name.toLowerCase() === name.toLowerCase());
+    const rec = { id: same >= 0 ? favs[same].id : Date.now(), name, items, ts: Date.now() };
+    if (same >= 0) favs[same] = rec; else favs.unshift(rec);
+    store.set("favs", favs);
+    favName.value = "";
+    renderFavs();
+    setFavMsg("★ \"" + name + "\" guardada (" + items.length + " pistas)" + (same >= 0 ? " — reemplazó a la anterior con ese nombre" : "") + (skipped ? ". " + skipped + " archivo(s) local(es) no se guardaron." : "."), "var(--green)");
+  }
+  function loadFav(f, append) {
+    if (!append) clearAll();
+    const known = new Set(tracks.map((x) => (x.isNet ? "n:" + x.url : x.isDrive ? "d:" + x.driveId : "")));
+    let n = 0;
+    for (const it of f.items) {
+      let tr = null;
+      if (it && it.k === "d" && typeof it.id === "string" && /^[\w-]{10,}$/.test(it.id)) {
+        if (known.has("d:" + it.id)) continue;
+        tr = { id: ++uid, name: String(it.name || "Pista de Drive"), url: "", dur: undefined, blob: null, isDrive: true, driveId: it.id };
+      } else if (it && it.k === "n" && /^https?:\/\//i.test(it.url || "")) {
+        if (known.has("n:" + it.url)) continue;
+        tr = { id: ++uid, name: String(it.name || it.url).slice(0, 200), url: it.url, dur: undefined, blob: null, isDrive: false, isNet: true };
+      }
+      if (!tr) continue;
+      tracks.push(tr); persist(tr); n++;
+    }
+    render();
+    if (n && cur === -1) select(0, true);
+    setFavMsg("▶ \"" + f.name + "\": " + n + " pista(s) " + (append ? "agregadas." : "cargadas."), "var(--green)");
+  }
+  function renderFavs() {
+    const favs = getFavs();
+    favListEl.innerHTML = "";
+    if (!favs.length) { const d = document.createElement("div"); d.className = "fav-empty"; d.textContent = "— Todavía no guardaste listas —"; favListEl.appendChild(d); return; }
+    favs.forEach((f) => {
+      const row = document.createElement("div"); row.className = "fav-item";
+      const nm = document.createElement("span"); nm.className = "fn"; nm.textContent = "★ " + f.name; nm.title = f.name;
+      const c = document.createElement("span"); c.className = "fc"; c.textContent = f.items.length + " pistas";
+      const b1 = document.createElement("button"); b1.textContent = "▶ CARGAR"; b1.className = "btn-accent"; b1.title = "Reemplaza la lista actual";
+      const b2 = document.createElement("button"); b2.textContent = "+ AGREGAR"; b2.title = "Suma estas pistas a la lista actual";
+      const b3 = document.createElement("button"); b3.textContent = "✕"; b3.title = "Borrar favorito"; b3.setAttribute("aria-label", "Borrar " + f.name);
+      b1.onclick = () => loadFav(f, false);
+      b2.onclick = () => loadFav(f, true);
+      b3.onclick = () => { store.set("favs", getFavs().filter((x) => x.id !== f.id)); renderFavs(); setFavMsg("Favorito \"" + f.name + "\" borrado."); };
+      row.append(nm, c, b1, b2, b3); favListEl.appendChild(row);
+    });
+  }
+  $("favSaveBtn").onclick = saveFav;
+  favName.onkeydown = (e) => { if (e.key === "Enter") saveFav(); };
+  renderFavs();
 
   function toggleConfigPanel() {
     const isCollapsed = configWin.classList.toggle("collapsed");
@@ -1312,14 +1396,6 @@ Los navegadores no pueden hablar los protocolos <b>smb://</b> (Samba) ni <b>UPnP
   driveSearchInput.onkeydown = (e) => {
     if (e.key === "Enter") performSearch(driveSearchInput.value);
   };
-
-  document.querySelectorAll(".sm-tag-btn").forEach((btn) => {
-    btn.onclick = () => {
-      const q = btn.getAttribute("data-query");
-      driveSearchInput.value = q;
-      performSearch(q);
-    };
-  });
 
   /* ---------- Helpers de UI ---------- */
   const fmt = (s) => {
@@ -1761,6 +1837,8 @@ Los navegadores no pueden hablar los protocolos <b>smb://</b> (Samba) ni <b>UPnP
     searchToggle.setAttribute("aria-expanded", "true");
     $("searchMinBtn").textContent = "−";
   }
+
+  if (store.get("favPanelOpen", false)) toggleFavPanel(true);
 
   if (store.get("netPanelOpen", false)) {
     netWin.classList.remove("collapsed");
