@@ -145,6 +145,14 @@
     letter-spacing: .04em;
     text-shadow: 0 0 6px rgba(0, 224, 0, .55);
   }
+  .vizbox { position: relative; flex: 1; min-width: 0; height: 44px; }
+  .vizbox canvas { cursor: pointer; display: block; }
+  .viz-btn {
+    position: absolute; right: 2px; bottom: 2px; width: 18px; height: 16px; padding: 0;
+    font-size: 11px; line-height: 1; opacity: .55; background: #0a1a0a; color: #00e000;
+    border: 1px solid #0d3a0d;
+  }
+  .viz-btn:hover, .viz-btn:focus-visible { opacity: 1; }
   canvas {
     flex: 1;
     min-width: 0;
@@ -702,7 +710,7 @@
 <span class="state" id="state">■</span>
 <span class="time" id="time">0:00</span>
 </div>
-<canvas aria-hidden="true" height="44" id="viz" width="190"></canvas>
+<div class="vizbox"><canvas aria-label="Visualizador de audio (tocá para cambiar de estilo)" height="44" id="viz" role="img" title="Tocá para cambiar de animación" width="190"></canvas><button aria-label="Cambiar animación" class="viz-btn" id="vizBtn" title="Cambiar animación">◐</button></div>
 </div>
 <div class="marq">
 <span id="ttl">DRIVE-AMP — agregá archivos o pegá un enlace de Drive</span>
@@ -1716,58 +1724,124 @@ Los navegadores no pueden hablar los protocolos <b>smb://</b> (Samba) ni <b>UPnP
     }
   });
 
-  /* ---------- Visualizador de Canvas con simulación en fallback ---------- */
+  /* ---------- Visualizador de Canvas (varios estilos) ---------- */
   const cv = $("viz"), g = cv.getContext("2d");
+  const VIZ_MODES = ["BARRAS", "ONDA", "ESPEJO", "RADIAL", "PUNTOS", "APAGADO"];
+  let vizMode = Number(store.get("viz", 0));
+  if (!(vizMode >= 0 && vizMode < VIZ_MODES.length)) vizMode = 0;
+  let vizLabelUntil = 0;
   const BARS = 19, peak = new Array(BARS).fill(0);
   let simPhase = 0;
+  const NB = 32; // bandas de espectro
+  const spec = new Array(NB).fill(0);
+  function nextViz(e) {
+    if (e) e.stopPropagation();
+    vizMode = (vizMode + 1) % VIZ_MODES.length;
+    store.set("viz", vizMode);
+    vizLabelUntil = performance.now() + 1200;
+    peak.fill(0);
+  }
+  cv.addEventListener("click", () => nextViz());
+  $("vizBtn").addEventListener("click", nextViz);
 
   function draw() {
     requestAnimationFrame(draw);
-    const w = cv.clientWidth * (window.devicePixelRatio || 1);
-    const h = cv.clientHeight * (window.devicePixelRatio || 1);
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.round(cv.clientWidth * dpr), h = Math.round(cv.clientHeight * dpr);
     if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
-    g.clearRect(0, 0, cv.width, cv.height);
-
-    let data = null;
-    if (analyser && audio === audioMain && !audio.paused) {
-      try {
-        data = new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteFrequencyData(data);
-      } catch (e) {
-        data = null;
-      }
-    }
-    const gap = 2 * (window.devicePixelRatio || 1);
-    const bw = (cv.width - gap * (BARS - 1)) / BARS;
+    g.clearRect(0, 0, w, h);
     simPhase += 0.08;
 
-    for (let i = 0; i < BARS; i++) {
+    const playing = !audio.paused && audio.currentTime > 0;
+    let freq = null, wave = null;
+    if (analyser && audio === audioMain && !audio.paused) {
+      try {
+        freq = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(freq);
+        wave = new Uint8Array(analyser.fftSize);
+        analyser.getByteTimeDomainData(wave);
+        if (!freq.some((x) => x > 0)) { freq = null; wave = null; }
+      } catch (e) { freq = null; wave = null; }
+    }
+    // Espectro normalizado (0..1) en NB bandas; si no hay datos reales, se sintetiza.
+    for (let i = 0; i < NB; i++) {
       let v = 0;
-      if (data && data.some(x => x > 0)) {
-        const lo = Math.floor(Math.pow(i / BARS, 1.6) * (data.length * 0.8));
-        const hi = Math.max(lo + 1, Math.floor(Math.pow((i + 1) / BARS, 1.6) * (data.length * 0.8)));
-        let s = 0;
-        for (let k = lo; k < hi; k++) s += data[k];
+      if (freq) {
+        const lo = Math.floor(Math.pow(i / NB, 1.6) * (freq.length * 0.8));
+        const hi = Math.max(lo + 1, Math.floor(Math.pow((i + 1) / NB, 1.6) * (freq.length * 0.8)));
+        let s = 0; for (let k = lo; k < hi; k++) s += freq[k];
         v = s / (hi - lo) / 255;
-      } else if (!audio.paused && audio.currentTime > 0) {
-        // Espectro dinámico sintetizado cuando el audio está sonando sin WebAudio directo
+      } else if (playing) {
         v = (Math.sin(simPhase + i * 0.5) * 0.35 + 0.45) * (0.6 + Math.cos(simPhase * 1.5 + i) * 0.25);
       }
+      spec[i] = v;
+    }
+    const level = spec.reduce((a, b) => a + b, 0) / NB;
+    const grad = g.createLinearGradient(0, h, 0, 0);
+    grad.addColorStop(0, "#00e000"); grad.addColorStop(0.6, "#00e000"); grad.addColorStop(1, "#ff9d00");
+    const mode = VIZ_MODES[vizMode];
 
-      peak[i] = Math.max(v, peak[i] - 0.015);
-      const bh = Math.max(2, v * cv.height);
-      const x = i * (bw + gap);
-      const grad = g.createLinearGradient(0, cv.height, 0, 0);
-      grad.addColorStop(0, "#00e000");
-      grad.addColorStop(0.6, "#00e000");
-      grad.addColorStop(1, "#ff9d00");
-      g.fillStyle = grad;
-      g.fillRect(x, cv.height - bh, bw, bh);
-
-      if (peak[i] > 0.03) {
-        g.fillStyle = "#ff9d00";
-        g.fillRect(x, cv.height - peak[i] * cv.height - 2, bw, 2);
+    if (mode === "BARRAS" || mode === "ESPEJO") {
+      const gap = 2 * dpr, n = BARS, bw = (w - gap * (n - 1)) / n;
+      for (let i = 0; i < n; i++) {
+        const a = Math.floor(i * NB / n), b = Math.max(a + 1, Math.floor((i + 1) * NB / n));
+        let v = 0; for (let k = a; k < b; k++) v += spec[k]; v /= (b - a);
+        peak[i] = Math.max(v, peak[i] - 0.015);
+        const x = i * (bw + gap);
+        if (mode === "BARRAS") {
+          const bh = Math.max(2, v * h);
+          g.fillStyle = grad; g.fillRect(x, h - bh, bw, bh);
+          if (peak[i] > 0.03) { g.fillStyle = "#ff9d00"; g.fillRect(x, h - peak[i] * h - 2, bw, 2); }
+        } else {
+          const bh = Math.max(1, v * h / 2);
+          g.fillStyle = "#00e000"; g.fillRect(x, h / 2 - bh, bw, bh);
+          g.fillStyle = "#00a000"; g.fillRect(x, h / 2, bw, bh);
+          if (peak[i] > 0.03) { g.fillStyle = "#ff9d00"; g.fillRect(x, h / 2 - peak[i] * h / 2 - 2, bw, 2); }
+        }
       }
+    } else if (mode === "ONDA") {
+      g.lineWidth = Math.max(1, dpr * 1.5); g.strokeStyle = "#00e000"; g.shadowColor = "#00e000"; g.shadowBlur = 4 * dpr;
+      g.beginPath();
+      const N = 96;
+      for (let i = 0; i < N; i++) {
+        let y;
+        if (wave) y = (wave[Math.floor(i * wave.length / N)] - 128) / 128;
+        else if (playing) y = Math.sin(simPhase * 2 + i * 0.35) * 0.45 * Math.sin(simPhase * 0.7 + i * 0.08) + Math.sin(i * 0.9 + simPhase * 3) * 0.12;
+        else y = 0;
+        const px = i * w / (N - 1), py = h / 2 + y * h * 0.45;
+        i ? g.lineTo(px, py) : g.moveTo(px, py);
+      }
+      g.stroke(); g.shadowBlur = 0;
+    } else if (mode === "RADIAL") {
+      const cx = w / 2, cy = h / 2, r0 = h * 0.18, rmax = h * 0.48;
+      g.lineWidth = Math.max(1.5, 2 * dpr); g.lineCap = "round";
+      for (let i = 0; i < NB * 2; i++) {
+        const v = spec[i % NB], ang = (i / (NB * 2)) * Math.PI * 2 - Math.PI / 2;
+        const r1 = r0 + Math.max(1, v * (rmax - r0));
+        g.strokeStyle = v > 0.7 ? "#ff9d00" : "#00e000";
+        g.beginPath(); g.moveTo(cx + Math.cos(ang) * r0, cy + Math.sin(ang) * r0);
+        g.lineTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1); g.stroke();
+      }
+      g.fillStyle = "rgba(0,224,0," + (0.2 + level * 0.8) + ")";
+      g.beginPath(); g.arc(cx, cy, r0 * 0.6, 0, Math.PI * 2); g.fill();
+    } else if (mode === "PUNTOS") {
+      const cols = 24, rows = 5, cw = w / cols, ch = h / rows, rad = Math.min(cw, ch) * 0.32;
+      for (let c = 0; c < cols; c++) {
+        const v = spec[Math.floor(c * NB / cols)], on = Math.round(v * rows);
+        for (let r = 0; r < rows; r++) {
+          const lit = r < on;
+          g.fillStyle = lit ? (r >= rows - 1 ? "#ff9d00" : "#00e000") : "#0a2a0a";
+          g.beginPath(); g.arc(c * cw + cw / 2, h - (r * ch + ch / 2), rad, 0, Math.PI * 2); g.fill();
+        }
+      }
+    } else { // APAGADO
+      g.fillStyle = "#0a2a0a"; g.fillRect(0, h / 2 - 1, w, 2);
+    }
+
+    if (performance.now() < vizLabelUntil) {
+      g.font = "bold " + Math.round(11 * dpr) + "px monospace"; g.textBaseline = "top";
+      g.fillStyle = "rgba(0,0,0,.65)"; g.fillRect(2 * dpr, 2 * dpr, (mode.length * 7 + 8) * dpr, 14 * dpr);
+      g.fillStyle = "#ffd24a"; g.fillText(mode, 6 * dpr, 4 * dpr);
     }
   }
   draw();
