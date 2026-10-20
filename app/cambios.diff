@@ -1,0 +1,641 @@
+diff --git a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml
+index 6248091..dc3d965 100644
+--- a/app/src/main/AndroidManifest.xml
++++ b/app/src/main/AndroidManifest.xml
+@@ -34,6 +34,12 @@
+             </intent-filter>
+         </service>
+ 
++        <!-- Carátulas estilo Drive-Amp para la pantalla del auto -->
++        <provider
++            android:name=".art.ArtProvider"
++            android:authorities="com.example.drive_amp.art"
++            android:exported="true" />
++
+         <activity
+             android:name=".MainActivity"
+             android:exported="true"
+diff --git a/app/src/main/java/com/example/drive_amp/MainActivity.kt b/app/src/main/java/com/example/drive_amp/MainActivity.kt
+index 0461c86..cf27113 100644
+--- a/app/src/main/java/com/example/drive_amp/MainActivity.kt
++++ b/app/src/main/java/com/example/drive_amp/MainActivity.kt
+@@ -37,6 +37,7 @@ import androidx.media3.common.Player
+ import androidx.media3.session.MediaController
+ import androidx.media3.session.SessionToken
+ import com.example.drive_amp.data.PlaylistRepository
++import com.example.drive_amp.data.resolveFolderTracks
+ import com.example.drive_amp.service.DriveAmpMediaService
+ import com.example.drive_amp.ui.theme.DriveAmpTheme
+ import com.google.common.util.concurrent.ListenableFuture
+@@ -65,7 +66,9 @@ data class Track(
+ 
+ data class DriveApiItem(
+     val title: String,
+-    val streamUrl: String
++    val streamUrl: String,
++    // true cuando es una carpeta devuelta por la búsqueda (streamUrl guarda el enlace de la carpeta)
++    val isFolder: Boolean = false
+ )
+ 
+ class MainActivity : ComponentActivity() {
+@@ -161,6 +164,10 @@ class MainActivity : ComponentActivity() {
+                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                     mediaItem?.let {
+                         currentTitle = it.mediaMetadata.title?.toString() ?: "Reproduciendo..."
++                        // Mantiene el número de pista al avanzar solo o al elegir desde el auto
++                        val id = it.mediaId.removePrefix(PlaylistRepository.FAV_PREFIX)
++                        val idx = playlist.indexOfFirst { track -> track.id == id }
++                        if (idx >= 0) currentTrackIndex = idx
+                     }
+                 }
+                 override fun onPlaybackStateChanged(playbackState: Int) {
+@@ -240,10 +247,19 @@ class MainActivity : ComponentActivity() {
+ 
+     private fun addTracks(newTracks: List<Track>) {
+         if (newTracks.isEmpty()) return
+-        updatePlaylist(playlist + newTracks)
+-        if (currentTrackIndex == -1) {
+-            playTrack(playlist.size - newTracks.size)
++        val known = playlist.map { it.uri }.toSet()
++        val fresh = newTracks.filter { it.uri !in known }
++        if (fresh.isEmpty()) {
++            // Ya estaba en la lista (por ejemplo, un favorito): se reproduce en vez de duplicarlo
++            val existing = playlist.indexOfFirst { it.uri == newTracks[0].uri }
++            if (existing >= 0) playTrack(existing)
++            return
+         }
++        // Ids únicos (varias pistas se crean en el mismo milisegundo)
++        val unique = fresh.mapIndexed { i, tr -> tr.copy(id = "${System.nanoTime()}_${i}_${tr.id.hashCode()}") }
++        val startAt = playlist.size
++        updatePlaylist(playlist + unique)
++        if (currentTrackIndex == -1) playTrack(startAt)
+     }
+ 
+     private fun addHttpUrl(rawUrl: String) {
+@@ -756,7 +772,8 @@ fun WinampPlayerScreen(
+                                             conn.requestMethod = "POST"
+                                             conn.setRequestProperty("Content-Type", "text/plain")
+                                             conn.doOutput = true
+-                                            conn.connectTimeout = 8000
++                                            conn.connectTimeout = 10000
++                                            conn.readTimeout = 90000
+ 
+                                             val payload = JSONObject().apply {
+                                                 put("json", JSONObject().apply {
+@@ -780,18 +797,21 @@ fun WinampPlayerScreen(
+                                                     ?: rootJson.optJSONObject("result")?.optJSONObject("data")?.optJSONObject("json") 
+                                                     ?: rootJson
+                                                 
+-                                                val tracksArr = jsonObj.optJSONArray("tracks") ?: JSONArray()
++                                                val tracksArr = jsonObj.optJSONArray("tracks") ?: jsonObj.optJSONArray("results") ?: JSONArray()
+                                                 for (i in 0 until tracksArr.length()) {
+                                                     val obj = tracksArr.getJSONObject(i)
+                                                     val name = obj.optString("title", obj.optString("name", "Audio"))
+                                                     val id = obj.optString("id", "")
+-                                                    val streamUrl = if (id.isNotBlank()) {
++                                                    val folderUrl = if (jsonObj.has("results")) obj.optString("url", "") else ""
++                                                    val streamUrl = if (folderUrl.isNotBlank()) {
++                                                        folderUrl
++                                                    } else if (id.isNotBlank()) {
+                                                         "$cleanServer/_api/drive/stream?id=$id"
+                                                     } else {
+                                                         obj.optString("streamUrl", obj.optString("url", ""))
+                                                     }
+                                                     if (streamUrl.isNotBlank()) {
+-                                                        list.add(DriveApiItem(name, streamUrl))
++                                                        list.add(DriveApiItem(name, streamUrl, folderUrl.isNotBlank()))
+                                                     }
+                                                 }
+                                             } catch (ex: Exception) {
+@@ -878,7 +898,8 @@ fun WinampPlayerScreen(
+                                             conn.requestMethod = "POST"
+                                             conn.setRequestProperty("Content-Type", "text/plain")
+                                             conn.doOutput = true
+-                                            conn.connectTimeout = 8000
++                                            conn.connectTimeout = 10000
++                                            conn.readTimeout = 90000
+ 
+                                             val payload = JSONObject().apply {
+                                                 put("json", JSONObject().apply {
+@@ -902,18 +923,21 @@ fun WinampPlayerScreen(
+                                                     ?: rootJson.optJSONObject("result")?.optJSONObject("data")?.optJSONObject("json") 
+                                                     ?: rootJson
+                                                 
+-                                                val tracksArr = jsonObj.optJSONArray("tracks") ?: JSONArray()
++                                                val tracksArr = jsonObj.optJSONArray("tracks") ?: jsonObj.optJSONArray("results") ?: JSONArray()
+                                                 for (i in 0 until tracksArr.length()) {
+                                                     val obj = tracksArr.getJSONObject(i)
+                                                     val name = obj.optString("title", obj.optString("name", "Audio"))
+                                                     val id = obj.optString("id", "")
+-                                                    val streamUrl = if (id.isNotBlank()) {
++                                                    val folderUrl = if (jsonObj.has("results")) obj.optString("url", "") else ""
++                                                    val streamUrl = if (folderUrl.isNotBlank()) {
++                                                        folderUrl
++                                                    } else if (id.isNotBlank()) {
+                                                         "$cleanServer/_api/drive/stream?id=$id"
+                                                     } else {
+                                                         obj.optString("streamUrl", obj.optString("url", ""))
+                                                     }
+                                                     if (streamUrl.isNotBlank()) {
+-                                                        list.add(DriveApiItem(name, streamUrl))
++                                                        list.add(DriveApiItem(name, streamUrl, folderUrl.isNotBlank()))
+                                                     }
+                                                 }
+                                             } catch (ex: Exception) {
+@@ -947,7 +971,7 @@ fun WinampPlayerScreen(
+                                 CircularProgressIndicator()
+                             }
+                         } else {
+-                            if (searchResults.isNotEmpty()) {
++                            if (searchResults.isNotEmpty() && searchResults.none { it.isFolder }) {
+                                 Spacer(modifier = Modifier.height(4.dp))
+                                 Button(
+                                     onClick = {
+@@ -975,13 +999,15 @@ fun WinampPlayerScreen(
+                                         Text(text = item.title, color = Color.White, fontSize = 11.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                         Button(
+                                             onClick = {
+-                                                val track = Track(System.currentTimeMillis().toString(), item.title, item.streamUrl, TrackType.DRIVE_PUBLIC)
+-                                                onAddDriveTracks(listOf(track))
++                                                coroutineScope.launch {
++                                                    val found = if (item.isFolder) resolveFolderTracks(serverBaseUrl, item.streamUrl) else listOf(item)
++                                                    onAddDriveTracks(found.map { Track(System.currentTimeMillis().toString() + it.title, it.title, it.streamUrl, TrackType.DRIVE_PUBLIC) })
++                                                }
+                                             },
+                                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007733)),
+                                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                         ) {
+-                                            Text("Añadir", fontSize = 10.sp)
++                                            Text(if (item.isFolder) "Añadir carpeta" else "Añadir", fontSize = 10.sp)
+                                         }
+                                     }
+                                 }
+diff --git a/app/src/main/java/com/example/drive_amp/art/ArtProvider.kt b/app/src/main/java/com/example/drive_amp/art/ArtProvider.kt
+new file mode 100644
+index 0000000..b107d83
+--- /dev/null
++++ b/app/src/main/java/com/example/drive_amp/art/ArtProvider.kt
+@@ -0,0 +1,54 @@
++package com.example.drive_amp.art
++
++import android.content.ContentProvider
++import android.content.ContentValues
++import android.database.Cursor
++import android.net.Uri
++import android.os.ParcelFileDescriptor
++import java.io.File
++
++/**
++ * Entrega al auto (Android Auto) la carátula de cada canción, generada al momento.
++ * Dirección: content://com.example.drive_amp.art/art?t=<título>&i=<número>&n=<total>
++ */
++class ArtProvider : ContentProvider() {
++
++    override fun onCreate(): Boolean = true
++
++    override fun getType(uri: Uri): String = "image/png"
++
++    override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor? {
++        val ctx = context ?: return null
++        val title = (uri.getQueryParameter("t") ?: "DRIVE-AMP").take(200)
++        val idx = uri.getQueryParameter("i")?.toIntOrNull() ?: 0
++        val total = uri.getQueryParameter("n")?.toIntOrNull() ?: 0
++        val dir = File(ctx.cacheDir, "art").apply { mkdirs() }
++        val file = File(dir, "a_" + (title + "|" + idx + "|" + total).hashCode() + ".png")
++        if (!file.exists()) {
++            val tmp = File(dir, file.name + ".tmp")
++            tmp.writeBytes(WinampArt.render(title, idx, total))
++            tmp.renameTo(file)
++        }
++        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
++    }
++
++    // Solo lectura de imágenes: el resto de operaciones no se usan.
++    override fun query(uri: Uri, projection: Array<out String>?, selection: String?, selectionArgs: Array<out String>?, sortOrder: String?): Cursor? = null
++    override fun insert(uri: Uri, values: ContentValues?): Uri? = null
++    override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int = 0
++    override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?): Int = 0
++
++    companion object {
++        const val AUTHORITY = "com.example.drive_amp.art"
++
++        fun uriFor(title: String, index: Int, total: Int): Uri =
++            Uri.Builder()
++                .scheme("content")
++                .authority(AUTHORITY)
++                .path("art")
++                .appendQueryParameter("t", title)
++                .appendQueryParameter("i", index.toString())
++                .appendQueryParameter("n", total.toString())
++                .build()
++    }
++}
+diff --git a/app/src/main/java/com/example/drive_amp/art/WinampArt.kt b/app/src/main/java/com/example/drive_amp/art/WinampArt.kt
+new file mode 100644
+index 0000000..49cf2e0
+--- /dev/null
++++ b/app/src/main/java/com/example/drive_amp/art/WinampArt.kt
+@@ -0,0 +1,128 @@
++package com.example.drive_amp.art
++
++import android.graphics.Bitmap
++import android.graphics.Canvas
++import android.graphics.Color
++import android.graphics.LinearGradient
++import android.graphics.Paint
++import android.graphics.Shader
++import android.graphics.Typeface
++import java.io.ByteArrayOutputStream
++import java.util.Random
++import kotlin.math.abs
++
++/**
++ * Dibuja la carátula estilo Drive-Amp (barra de título azul, LCD negro, barras verdes
++ * con topes naranjas y el título en verde monoespaciado). Se usa como carátula de cada
++ * canción en la pantalla del auto.
++ */
++object WinampArt {
++    private const val SIZE = 512
++    private val GREEN = Color.rgb(0, 224, 0)
++    private val DIM_GREEN = Color.rgb(0, 160, 0)
++    private val ORANGE = Color.rgb(255, 157, 0)
++
++    fun render(title: String, index: Int, total: Int): ByteArray {
++        val s = SIZE
++        val bmp = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888)
++        val c = Canvas(bmp)
++        val p = Paint(Paint.ANTI_ALIAS_FLAG)
++        val sf = s.toFloat()
++
++        c.drawColor(Color.rgb(20, 24, 34))
++
++        // Marco
++        p.style = Paint.Style.STROKE
++        p.strokeWidth = 3f
++        p.color = Color.rgb(109, 118, 144)
++        c.drawRect(1.5f, 1.5f, sf - 1.5f, sf - 1.5f, p)
++        p.style = Paint.Style.FILL
++
++        // Barra de título (degradado azul)
++        p.shader = LinearGradient(0f, 3f, 0f, 58f, Color.rgb(60, 90, 150), Color.rgb(29, 44, 82), Shader.TileMode.CLAMP)
++        c.drawRect(3f, 3f, sf - 3f, 58f, p)
++        p.shader = null
++        p.color = Color.rgb(230, 236, 255)
++        p.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
++        p.textSize = 27f
++        p.textAlign = Paint.Align.CENTER
++        c.drawText("DRIVE-AMP", sf / 2f, 40f, p)
++
++        // Pantalla LCD
++        p.color = Color.BLACK
++        c.drawRect(22f, 75f, sf - 22f, sf - 22f, p)
++
++        // Barras decorativas (siempre iguales para la misma canción)
++        val rnd = Random(title.hashCode().toLong())
++        val n = 19
++        val gap = 5f
++        val bw = (sf - 60f - gap * (n - 1)) / n
++        val base = 235f
++        val maxH = 125f
++        for (i in 0 until n) {
++            val v = 0.25f + 0.75f * (rnd.nextFloat() * 0.7f + 0.3f * (1f - abs(i - n / 2f) / (n / 2f)))
++            val bh = v * maxH
++            val x = 30f + i * (bw + gap)
++            p.shader = LinearGradient(
++                0f, base, 0f, base - maxH,
++                intArrayOf(GREEN, GREEN, ORANGE), floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP
++            )
++            c.drawRect(x, base - bh, x + bw, base, p)
++            p.shader = null
++            p.color = ORANGE
++            c.drawRect(x, base - bh - 5f, x + bw, base - bh - 2.5f, p)
++        }
++
++        // Título en recuadro verde oscuro (hasta 3 líneas)
++        p.typeface = Typeface.MONOSPACE
++        p.textAlign = Paint.Align.LEFT
++        p.textSize = 29f
++        val maxW = sf - 44f - 24f
++        val lines = wrap(p, title.ifBlank { "DRIVE-AMP" }, maxW, 3)
++        val boxTop = 258f
++        val lineH = 38f
++        p.color = Color.rgb(2, 16, 2)
++        c.drawRect(30f, boxTop, sf - 30f, boxTop + lines.size * lineH + 14f, p)
++        p.color = GREEN
++        var y = boxTop + 32f
++        for (ln in lines) {
++            c.drawText(ln, 42f, y, p)
++            y += lineH
++        }
++
++        // Pie: número de pista y origen
++        p.textSize = 20f
++        p.color = GREEN
++        c.drawText(String.format("%02d / %d", index, total), 30f, sf - 40f, p)
++        p.color = DIM_GREEN
++        p.textAlign = Paint.Align.RIGHT
++        c.drawText("STREAMING DRIVE", sf - 30f, sf - 40f, p)
++
++        val out = ByteArrayOutputStream()
++        bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
++        bmp.recycle()
++        return out.toByteArray()
++    }
++
++    private fun wrap(p: Paint, text: String, maxWidth: Float, maxLines: Int): List<String> {
++        val lines = mutableListOf<String>()
++        var rest = text.trim()
++        while (rest.isNotEmpty() && lines.size < maxLines) {
++            val count = p.breakText(rest, true, maxWidth, null)
++            if (count <= 0) break
++            var cut = count
++            if (cut < rest.length) {
++                val sp = rest.lastIndexOf(' ', cut)
++                if (sp > 0) cut = sp
++            }
++            var line = rest.substring(0, cut).trim()
++            rest = rest.substring(cut).trim()
++            if (lines.size == maxLines - 1 && rest.isNotEmpty()) {
++                line = line.dropLast(1) + "…"
++                rest = ""
++            }
++            lines.add(line)
++        }
++        return lines
++    }
++}
+diff --git a/app/src/main/java/com/example/drive_amp/data/DriveApi.kt b/app/src/main/java/com/example/drive_amp/data/DriveApi.kt
+new file mode 100644
+index 0000000..6ea5d02
+--- /dev/null
++++ b/app/src/main/java/com/example/drive_amp/data/DriveApi.kt
+@@ -0,0 +1,43 @@
++package com.example.drive_amp.data
++
++import com.example.drive_amp.DriveApiItem
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.withContext
++import org.json.JSONArray
++import org.json.JSONObject
++import java.net.HttpURLConnection
++import java.net.URL
++
++/** Pide al servidor de Floot las pistas de un enlace o carpeta de Drive (el mismo servidor que usa la página web). */
++suspend fun resolveFolderTracks(serverBaseUrl: String, link: String): List<DriveApiItem> = withContext(Dispatchers.IO) {
++    val server = serverBaseUrl.trim().trimEnd('/')
++    val conn = URL("$server/_api/drive/resolve").openConnection() as HttpURLConnection
++    try {
++        conn.requestMethod = "POST"
++        conn.setRequestProperty("Content-Type", "text/plain")
++        conn.doOutput = true
++        conn.connectTimeout = 10_000
++        conn.readTimeout = 90_000
++        val payload = JSONObject().put("json", JSONObject().put("links", JSONArray().put(link))).toString()
++        conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
++        if (conn.responseCode != 200) return@withContext emptyList()
++        val body = conn.inputStream.bufferedReader().use { it.readText() }
++        val root = JSONObject(body)
++        val json = root.optJSONObject("json") ?: root
++        val arr = json.optJSONArray("tracks") ?: JSONArray()
++        val out = mutableListOf<DriveApiItem>()
++        for (i in 0 until arr.length()) {
++            val o = arr.getJSONObject(i)
++            val id = o.optString("id", "")
++            if (id.isNotBlank()) {
++                out.add(DriveApiItem(o.optString("title", "Audio"), "$server/_api/drive/stream?id=$id"))
++            }
++        }
++        out
++    } catch (e: Exception) {
++        e.printStackTrace()
++        emptyList()
++    } finally {
++        conn.disconnect()
++    }
++}
+diff --git a/app/src/main/java/com/example/drive_amp/data/PlaylistRepository.kt b/app/src/main/java/com/example/drive_amp/data/PlaylistRepository.kt
+index 4aab124..07a51ff 100644
+--- a/app/src/main/java/com/example/drive_amp/data/PlaylistRepository.kt
++++ b/app/src/main/java/com/example/drive_amp/data/PlaylistRepository.kt
+@@ -1,11 +1,11 @@
+ package com.example.drive_amp.data
+ 
+ import android.content.Context
+-import android.net.Uri
+ import androidx.media3.common.MediaItem
+ import androidx.media3.common.MediaMetadata
+ import com.example.drive_amp.Track
+ import com.example.drive_amp.TrackType
++import com.example.drive_amp.art.ArtProvider
+ import org.json.JSONArray
+ import org.json.JSONObject
+ 
+@@ -13,6 +13,9 @@ object PlaylistRepository {
+     private const val PREFS_NAME = "DriveAmpPrefs"
+     private const val KEY_PLAYLIST = "saved_playlist"
+ 
++    /** Prefijo del mediaId de las pistas que se muestran dentro de la carpeta "Favoritos" del auto. */
++    const val FAV_PREFIX = "fav:"
++
+     fun savePlaylist(context: Context, tracks: List<Track>) {
+         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+         val jsonArray = JSONArray()
+@@ -22,6 +25,7 @@ object PlaylistRepository {
+                 put("title", track.title)
+                 put("uri", track.uri)
+                 put("type", track.type.name)
++                put("fav", track.isFavorite)
+             }
+             jsonArray.put(obj)
+         }
+@@ -40,7 +44,8 @@ object PlaylistRepository {
+                     id = obj.getString("id"),
+                     title = obj.getString("title"),
+                     uri = obj.getString("uri"),
+-                    type = TrackType.valueOf(obj.getString("type"))
++                    type = TrackType.valueOf(obj.getString("type")),
++                    isFavorite = obj.optBoolean("fav", false)
+                 )
+                 list.add(track)
+             }
+@@ -50,11 +55,12 @@ object PlaylistRepository {
+         return list
+     }
+ 
+-    fun getMediaItems(context: Context): List<MediaItem> {
+-        val defaultArtUri = Uri.parse("android.resource://com.example.drive_amp/drawable/default_album_art")
+-        return getTracks(context).map { track ->
++    /** Convierte pistas a items de Media3, con la carátula estilo Drive-Amp. */
++    fun toMediaItems(tracks: List<Track>, idPrefix: String = ""): List<MediaItem> {
++        val total = tracks.size
++        return tracks.mapIndexed { i, track ->
+             MediaItem.Builder()
+-                .setMediaId(track.id)
++                .setMediaId(idPrefix + track.id)
+                 .setUri(track.uri)
+                 .setMediaMetadata(
+                     MediaMetadata.Builder()
+@@ -62,10 +68,16 @@ object PlaylistRepository {
+                         .setArtist("Drive-Amp [${track.type.label}]")
+                         .setIsPlayable(true)
+                         .setIsBrowsable(false)
+-                        .setArtworkUri(defaultArtUri)
++                        .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
++                        .setArtworkUri(ArtProvider.uriFor(track.title, i + 1, total))
+                         .build()
+                 )
+                 .build()
+         }
+     }
++
++    fun getMediaItems(context: Context): List<MediaItem> = toMediaItems(getTracks(context))
++
++    fun getFavoriteMediaItems(context: Context): List<MediaItem> =
++        toMediaItems(getTracks(context).filter { it.isFavorite }, FAV_PREFIX)
+ }
+diff --git a/app/src/main/java/com/example/drive_amp/service/DriveAmpMediaService.kt b/app/src/main/java/com/example/drive_amp/service/DriveAmpMediaService.kt
+index 986ad29..f981f46 100644
+--- a/app/src/main/java/com/example/drive_amp/service/DriveAmpMediaService.kt
++++ b/app/src/main/java/com/example/drive_amp/service/DriveAmpMediaService.kt
+@@ -15,6 +15,7 @@ import com.google.common.collect.ImmutableList
+ import com.google.common.util.concurrent.Futures
+ import com.google.common.util.concurrent.ListenableFuture
+ 
++@OptIn(UnstableApi::class)
+ class DriveAmpMediaService : MediaLibraryService() {
+ 
+     private lateinit var player: ExoPlayer
+@@ -22,13 +23,60 @@ class DriveAmpMediaService : MediaLibraryService() {
+ 
+     companion object {
+         const val ROOT_ID = "DRIVE_AMP_ROOT"
++        const val LIST_ID = "DRIVE_AMP_LIST"
++        const val FAVS_ID = "DRIVE_AMP_FAVS"
++    }
++
++    private fun folder(id: String, title: String): MediaItem =
++        MediaItem.Builder()
++            .setMediaId(id)
++            .setMediaMetadata(
++                MediaMetadata.Builder()
++                    .setTitle(title)
++                    .setIsPlayable(false)
++                    .setIsBrowsable(true)
++                    .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
++                    .build()
++            )
++            .build()
++
++    /**
++     * El auto (y otros controles) piden reproducir una pista solo por su mediaId, sin dirección.
++     * Acá se completa con la dirección guardada y se carga toda la lista (o la de favoritos)
++     * empezando por la pista elegida, así "siguiente" y "anterior" funcionan.
++     */
++    private fun resolveSelection(
++        items: List<MediaItem>,
++        startIndex: Int,
++        startPositionMs: Long
++    ): MediaSession.MediaItemsWithStartPosition {
++        val first = items.firstOrNull()
++        if (items.size == 1 && first != null) {
++            val id = first.mediaId
++            val list = if (id.startsWith(PlaylistRepository.FAV_PREFIX))
++                PlaylistRepository.getFavoriteMediaItems(this)
++            else
++                PlaylistRepository.getMediaItems(this)
++            val idx = list.indexOfFirst { it.mediaId == id }
++            if (idx >= 0) {
++                return MediaSession.MediaItemsWithStartPosition(list, idx, startPositionMs)
++            }
++        }
++        val resolved = items.mapNotNull { resolveOne(it) }
++        return MediaSession.MediaItemsWithStartPosition(resolved, if (startIndex in resolved.indices) startIndex else 0, startPositionMs)
++    }
++
++    /** Completa un pedido que llega solo con mediaId (sin dirección) usando la lista guardada. */
++    private fun resolveOne(req: MediaItem): MediaItem? {
++        if (req.localConfiguration != null) return req
++        return (PlaylistRepository.getMediaItems(this) + PlaylistRepository.getFavoriteMediaItems(this))
++            .firstOrNull { it.mediaId == req.mediaId }
+     }
+ 
+-    @OptIn(UnstableApi::class)
+     override fun onCreate() {
+         super.onCreate()
+ 
+-        // Configurar AudioAttributes con manejo automático de Foco de Audio (evita silenciamientos al cambiar de app o bloquear)
++        // AudioAttributes con manejo automático de foco de audio (evita silencios al cambiar de app o bloquear)
+         val audioAttributes = AudioAttributes.Builder()
+             .setUsage(C.USAGE_MEDIA)
+             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+@@ -50,7 +98,7 @@ class DriveAmpMediaService : MediaLibraryService() {
+                         MediaMetadata.Builder()
+                             .setIsPlayable(false)
+                             .setIsBrowsable(true)
+-                            .setTitle("Drive-Amp Playlist")
++                            .setTitle("Drive-Amp")
+                             .build()
+                     )
+                     .build()
+@@ -65,13 +113,55 @@ class DriveAmpMediaService : MediaLibraryService() {
+                 pageSize: Int,
+                 params: LibraryParams?
+             ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+-                if (parentId == ROOT_ID) {
+-                    val mediaItems = PlaylistRepository.getMediaItems(this@DriveAmpMediaService)
+-                    return Futures.immediateFuture(
+-                        LibraryResult.ofItemList(ImmutableList.copyOf(mediaItems), params)
+-                    )
++                val items: List<MediaItem> = when (parentId) {
++                    ROOT_ID -> listOf(folder(LIST_ID, "Lista de reproducción"), folder(FAVS_ID, "Favoritos ★"))
++                    LIST_ID -> PlaylistRepository.getMediaItems(this@DriveAmpMediaService)
++                    FAVS_ID -> PlaylistRepository.getFavoriteMediaItems(this@DriveAmpMediaService)
++                    else -> emptyList()
+                 }
+-                return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.of(), params))
++                val from = (page.toLong() * pageSize).coerceIn(0L, items.size.toLong()).toInt()
++                val to = (from.toLong() + pageSize).coerceIn(0L, items.size.toLong()).toInt()
++                return Futures.immediateFuture(
++                    LibraryResult.ofItemList(ImmutableList.copyOf(items.subList(from, to)), params)
++                )
++            }
++
++            override fun onGetItem(
++                session: MediaLibrarySession,
++                browser: MediaSession.ControllerInfo,
++                mediaId: String
++            ): ListenableFuture<LibraryResult<MediaItem>> {
++                val item: MediaItem? = when (mediaId) {
++                    LIST_ID -> folder(LIST_ID, "Lista de reproducción")
++                    FAVS_ID -> folder(FAVS_ID, "Favoritos ★")
++                    else -> (PlaylistRepository.getMediaItems(this@DriveAmpMediaService) +
++                        PlaylistRepository.getFavoriteMediaItems(this@DriveAmpMediaService))
++                        .firstOrNull { it.mediaId == mediaId }
++                }
++                return if (item != null) {
++                    Futures.immediateFuture(LibraryResult.ofItem(item, null))
++                } else {
++                    Futures.immediateFuture(LibraryResult.ofError<MediaItem>(LibraryResult.RESULT_ERROR_BAD_VALUE))
++                }
++            }
++
++            override fun onAddMediaItems(
++                mediaSession: MediaSession,
++                controller: MediaSession.ControllerInfo,
++                mediaItems: MutableList<MediaItem>
++            ): ListenableFuture<MutableList<MediaItem>> {
++                val resolved = mediaItems.mapNotNull { resolveOne(it) }.toMutableList()
++                return Futures.immediateFuture(resolved)
++            }
++
++            override fun onSetMediaItems(
++                mediaSession: MediaSession,
++                controller: MediaSession.ControllerInfo,
++                mediaItems: MutableList<MediaItem>,
++                startIndex: Int,
++                startPositionMs: Long
++            ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
++                return Futures.immediateFuture(resolveSelection(mediaItems, startIndex, startPositionMs))
+             }
+         }
+ 
