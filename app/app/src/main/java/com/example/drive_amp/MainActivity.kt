@@ -37,7 +37,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.example.drive_amp.data.PlaylistRepository
-import com.example.drive_amp.data.resolveFolderTracks
+import com.example.drive_amp.data.resolveFolderTracksOrError
 import com.example.drive_amp.service.DriveAmpMediaService
 import com.example.drive_amp.ui.theme.DriveAmpTheme
 import com.google.common.util.concurrent.ListenableFuture
@@ -86,6 +86,28 @@ class MainActivity : ComponentActivity() {
     var durationMs by mutableStateOf(0L)
     var volume by mutableStateOf(0.81f)
     var serverBaseUrl by mutableStateOf("https://driveamp.floot.app")
+    // Si está activo, todo lo que se agregue (Drive, búsqueda, red, local) queda marcado como favorito
+    var addAsFav by mutableStateOf(false)
+
+    private fun withFav(list: List<Track>): List<Track> {
+        if (addAsFav) addFavorites(list)
+        return list
+    }
+
+    private fun addFavorites(list: List<Track>) {
+        val known = favorites.map { it.uri }.toSet()
+        val fresh = list.filter { it.uri !in known }.distinctBy { it.uri }
+            .mapIndexed { i, t -> t.copy(id = "fav_${System.nanoTime()}_$i", isFavorite = true) }
+        if (fresh.isEmpty()) return
+        favorites = favorites + fresh
+        PlaylistRepository.saveFavorites(this, favorites)
+    }
+
+    private fun removeFavorite(track: Track) {
+        favorites = favorites.filter { it.uri != track.uri }
+        PlaylistRepository.saveFavorites(this, favorites)
+        updatePlaylist(playlist)
+    }
 
     // Selector de archivos locales
     private val localFileLauncher = registerForActivityResult(
@@ -96,7 +118,7 @@ class MainActivity : ComponentActivity() {
                 val name = getFileName(uri) ?: "Audio Local"
                 Track(System.currentTimeMillis().toString() + name, name, uri.toString(), TrackType.LOCAL)
             }
-            updatePlaylist(playlist + newTracks)
+            updatePlaylist(playlist + withFav(newTracks))
             if (currentTrackIndex == -1 && playlist.isNotEmpty()) playTrack(0)
         }
     }
@@ -135,7 +157,7 @@ class MainActivity : ComponentActivity() {
 
                 scanDirectory(rootDoc)
                 if (discoveredTracks.isNotEmpty()) {
-                    updatePlaylist(playlist + discoveredTracks)
+                    updatePlaylist(playlist + withFav(discoveredTracks))
                     if (currentTrackIndex == -1) playTrack(0)
                 }
             }
@@ -147,7 +169,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         playlist = PlaylistRepository.getTracks(this)
-        favorites = playlist.filter { it.isFavorite }
+        favorites = PlaylistRepository.getFavorites(this)
+        playlist = playlist.map { t -> t.copy(isFavorite = favorites.any { it.uri == t.uri }) }
 
         val prefs = getSharedPreferences("DriveAmpPrefs", MODE_PRIVATE)
         serverBaseUrl = prefs.getString("server_base_url", "https://driveamp.floot.app") ?: "https://driveamp.floot.app"
@@ -211,6 +234,9 @@ class MainActivity : ComponentActivity() {
                         onOpenFiles = { localFileLauncher.launch(arrayOf("audio/*")) },
                         onOpenFolder = { localFolderLauncher.launch(null) },
                         onToggleFavorite = { track -> toggleFavorite(track) },
+                        onRemoveFavorite = { track -> removeFavorite(track) },
+                        addAsFav = addAsFav,
+                        onToggleAddAsFav = { addAsFav = !addAsFav },
                         onVolumeChange = { v ->
                             volume = v
                             mediaController?.volume = v
@@ -222,9 +248,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun updatePlaylist(newList: List<Track>) {
-        playlist = newList
-        favorites = playlist.filter { it.isFavorite }
+        val favUris = favorites.map { it.uri }.toSet()
+        playlist = newList.map { it.copy(isFavorite = it.uri in favUris) }
         PlaylistRepository.savePlaylist(this, playlist)
+        syncControllerList()
     }
 
     private fun clearPlaylist() {
@@ -251,12 +278,17 @@ class MainActivity : ComponentActivity() {
         val fresh = newTracks.filter { it.uri !in known }
         if (fresh.isEmpty()) {
             // Ya estaba en la lista (por ejemplo, un favorito): se reproduce en vez de duplicarlo
+            if (addAsFav) {
+                addFavorites(newTracks)
+                updatePlaylist(playlist)
+                return
+            }
             val existing = playlist.indexOfFirst { it.uri == newTracks[0].uri }
             if (existing >= 0) playTrack(existing)
             return
         }
         // Ids únicos (varias pistas se crean en el mismo milisegundo)
-        val unique = fresh.mapIndexed { i, tr -> tr.copy(id = "${System.nanoTime()}_${i}_${tr.id.hashCode()}") }
+        val unique = withFav(fresh.mapIndexed { i, tr -> tr.copy(id = "${System.nanoTime()}_${i}_${tr.id.hashCode()}") })
         val startAt = playlist.size
         updatePlaylist(playlist + unique)
         if (currentTrackIndex == -1) playTrack(startAt)
@@ -266,15 +298,13 @@ class MainActivity : ComponentActivity() {
         if (rawUrl.isBlank()) return
         val title = rawUrl.substringAfterLast("/").ifBlank { "Stream Red" }
         val track = Track(System.currentTimeMillis().toString(), title, rawUrl.trim(), TrackType.HTTP)
-        updatePlaylist(playlist + track)
+        updatePlaylist(playlist + withFav(listOf(track)))
         if (currentTrackIndex == -1) playTrack(playlist.size - 1)
     }
 
     private fun toggleFavorite(track: Track) {
-        val updated = playlist.map {
-            if (it.id == track.id) it.copy(isFavorite = !it.isFavorite) else it
-        }
-        updatePlaylist(updated)
+        if (favorites.any { it.uri == track.uri }) removeFavorite(track)
+        else { addFavorites(listOf(track)); updatePlaylist(playlist) }
     }
 
     private fun playTrack(index: Int) {
@@ -287,22 +317,27 @@ class MainActivity : ComponentActivity() {
             TrackType.LOCAL -> "AUDIO OFFLINE"
         }
 
-        val mediaItem = MediaItem.Builder()
-            .setMediaId(track.id)
-            .setUri(Uri.parse(track.uri))
-            .setMediaMetadata(
-                androidx.media3.common.MediaMetadata.Builder()
-                    .setTitle(track.title)
-                    .setArtist("Drive-Amp")
-                    .build()
-            )
-            .build()
-
         mediaController?.let { controller ->
-            controller.setMediaItem(mediaItem)
+            val sameList = controller.mediaItemCount == playlist.size &&
+                (0 until controller.mediaItemCount).all { controller.getMediaItemAt(it).mediaId == playlist[it].id }
+            if (sameList) {
+                controller.seekTo(index, 0L)
+            } else {
+                // Se carga la lista completa: así el estéreo, la notificación y el auto pueden adelantar/retroceder pistas
+                controller.setMediaItems(PlaylistRepository.toMediaItems(playlist), index, 0L)
+            }
             controller.prepare()
             controller.play()
         }
+    }
+
+    /** Mantiene la lista del reproductor igual a la lista de la app (agregados mientras suena). */
+    private fun syncControllerList() {
+        val c = mediaController ?: return
+        val n = c.mediaItemCount
+        if (n == 0 || playlist.size <= n) return
+        val same = (0 until n).all { c.getMediaItemAt(it).mediaId == playlist[it].id }
+        if (same) c.addMediaItems(PlaylistRepository.toMediaItems(playlist.drop(n)))
     }
 
     private fun togglePlayPause() {
@@ -337,7 +372,11 @@ class MainActivity : ComponentActivity() {
 
     private fun removeTrack(index: Int) {
         val list = playlist.toMutableList()
+        val removedId = list[index].id
         list.removeAt(index)
+        mediaController?.let { c ->
+            if (currentTrackIndex != index && index < c.mediaItemCount && c.getMediaItemAt(index).mediaId == removedId) c.removeMediaItem(index)
+        }
         updatePlaylist(list)
         if (currentTrackIndex == index) {
             mediaController?.stop()
@@ -379,6 +418,9 @@ fun WinampPlayerScreen(
     onOpenFiles: () -> Unit,
     onOpenFolder: () -> Unit,
     onToggleFavorite: (Track) -> Unit,
+    onRemoveFavorite: (Track) -> Unit,
+    addAsFav: Boolean,
+    onToggleAddAsFav: () -> Unit,
     onVolumeChange: (Float) -> Unit
 ) {
     var visualizerStyle by remember { mutableStateOf(0) }
@@ -394,6 +436,7 @@ fun WinampPlayerScreen(
     // Estados para búsqueda Drive
     var searchResults by remember { mutableStateOf<List<DriveApiItem>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
+    var searchStatus by remember { mutableStateOf("") }
 
     val coroutineScope = rememberCoroutineScope()
 
@@ -575,6 +618,7 @@ fun WinampPlayerScreen(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             WinampActionButton("FAVORITOS ★", favorites.isNotEmpty(), Modifier.weight(1f)) { activeModal = "FAVORITOS" }
+            WinampActionButton(if (addAsFav) "AGREGAR A ★ : SÍ" else "AGREGAR A ★ : NO", addAsFav, Modifier.weight(1.4f)) { onToggleAddAsFav() }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -705,16 +749,26 @@ fun WinampPlayerScreen(
                         if (favorites.isEmpty()) {
                             Text("No tienes favoritos guardados aún. Toca la estrella ★ en cualquier pista.", color = Color.Gray, fontSize = 11.sp)
                         } else {
-                            LazyColumn(modifier = Modifier.height(200.dp)) {
+                            Button(
+                                onClick = {
+                                    onAddDriveTracks(favorites.toList())
+                                    activeModal = null
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007733)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("▶ Cargar todos a la lista (${favorites.size})", fontSize = 12.sp)
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LazyColumn(modifier = Modifier.height(180.dp)) {
                                 itemsIndexed(favorites) { _, fav ->
+                                    var confirmDel by remember(fav.uri) { mutableStateOf(false) }
                                     Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 4.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(text = "★ ${fav.title}", color = Color(0xFFFFCC00), fontSize = 12.sp, modifier = Modifier.weight(1f))
+                                        Text(text = "★ ${fav.title}", color = Color(0xFFFFCC00), fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                                         Button(
                                             onClick = {
                                                 onAddDriveTracks(listOf(fav))
@@ -723,7 +777,14 @@ fun WinampPlayerScreen(
                                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0055A5)),
                                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
                                         ) {
-                                            Text("Reproducir", fontSize = 10.sp)
+                                            Text("▶", fontSize = 10.sp)
+                                        }
+                                        Button(
+                                            onClick = { if (confirmDel) onRemoveFavorite(fav) else confirmDel = true },
+                                            colors = ButtonDefaults.buttonColors(containerColor = if (confirmDel) Color(0xFFAA2222) else Color(0xFF444444)),
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(if (confirmDel) "¿Borrar?" else "✕", fontSize = 10.sp)
                                         }
                                     }
                                 }
@@ -850,24 +911,10 @@ fun WinampPlayerScreen(
                             } else {
                                 Text("¡${resolvedTracks!!.size} pistas encontradas!", color = Color(0xFF00FF66), fontSize = 12.sp)
                                 Spacer(modifier = Modifier.height(4.dp))
-                                LazyColumn(modifier = Modifier.height(180.dp)) {
+                                LazyColumn(modifier = Modifier.height(120.dp)) {
                                     itemsIndexed(resolvedTracks!!) { _, item ->
                                         Text("• ${item.title}", color = Color.White, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(
-                                    onClick = {
-                                        val tracksToAdd = resolvedTracks!!.map {
-                                            Track(System.currentTimeMillis().toString() + it.title, it.title, it.streamUrl, TrackType.DRIVE_PUBLIC)
-                                        }
-                                        onAddDriveTracks(tracksToAdd)
-                                        activeModal = null
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007733)),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("➕ Agregar lista (${resolvedTracks!!.size} pistas)", fontSize = 12.sp)
                                 }
                             }
                         }
@@ -890,6 +937,7 @@ fun WinampPlayerScreen(
                             onClick = {
                                 if (searchInput.isNotBlank()) {
                                     isSearching = true
+                                    searchStatus = ""
                                     coroutineScope.launch(Dispatchers.IO) {
                                         try {
                                             val cleanServer = serverBaseUrl.trimEnd('/')
@@ -917,6 +965,14 @@ fun WinampPlayerScreen(
                                             }
 
                                             val list = mutableListOf<DriveApiItem>()
+                                            var status = ""
+                                            if (code != 200) {
+                                                status = try {
+                                                    val o = JSONObject(body)
+                                                    (o.optJSONObject("json") ?: o).optString("error", "")
+                                                } catch (_: Exception) { "" }
+                                                if (status.isBlank()) status = "El servidor respondió con error $code"
+                                            }
                                             try {
                                                 val rootJson = JSONObject(body)
                                                 val jsonObj = rootJson.optJSONObject("json") 
@@ -944,13 +1000,18 @@ fun WinampPlayerScreen(
                                                 ex.printStackTrace()
                                             }
 
+                                            if (status.isBlank() && list.isEmpty()) status = "Sin resultados. Probá con otras palabras."
                                             withContext(Dispatchers.Main) {
                                                 searchResults = list
+                                                searchStatus = status
                                                 isSearching = false
                                             }
                                         } catch (e: Exception) {
                                             e.printStackTrace()
+                                            val msg = if (e is java.net.SocketTimeoutException) "Se agotó el tiempo de espera. Probá de nuevo."
+                                                else "No se pudo conectar: ${e.javaClass.simpleName} ${e.message ?: ""}"
                                             withContext(Dispatchers.Main) {
+                                                searchStatus = msg
                                                 searchResults = emptyList()
                                                 isSearching = false
                                             }
@@ -971,6 +1032,9 @@ fun WinampPlayerScreen(
                                 CircularProgressIndicator()
                             }
                         } else {
+                            if (searchStatus.isNotBlank()) {
+                                Text(searchStatus, color = Color(0xFFFFAA00), fontSize = 12.sp)
+                            }
                             if (searchResults.isNotEmpty() && searchResults.none { it.isFolder }) {
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Button(
@@ -999,9 +1063,15 @@ fun WinampPlayerScreen(
                                         Text(text = item.title, color = Color.White, fontSize = 11.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         Button(
                                             onClick = {
+                                                searchStatus = "Cargando pistas de «${item.title}»…"
                                                 coroutineScope.launch {
-                                                    val found = if (item.isFolder) resolveFolderTracks(serverBaseUrl, item.streamUrl) else listOf(item)
-                                                    onAddDriveTracks(found.map { Track(System.currentTimeMillis().toString() + it.title, it.title, it.streamUrl, TrackType.DRIVE_PUBLIC) })
+                                                    val (found, err) = if (item.isFolder) resolveFolderTracksOrError(serverBaseUrl, item.streamUrl) else Pair(listOf(item), null)
+                                                    if (found.isEmpty()) {
+                                                        searchStatus = err ?: "No se encontraron pistas."
+                                                    } else {
+                                                        onAddDriveTracks(found.map { Track(System.currentTimeMillis().toString() + it.title, it.title, it.streamUrl, TrackType.DRIVE_PUBLIC) })
+                                                        searchStatus = "✔ Se agregaron ${found.size} pistas."
+                                                    }
                                                 }
                                             },
                                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007733)),
@@ -1031,7 +1101,20 @@ fun WinampPlayerScreen(
                 }
             },
             confirmButton = {
-                if (activeModal == "RED") {
+                if (activeModal == "DRIVE" && !resolvedTracks.isNullOrEmpty()) {
+                    Button(
+                        onClick = {
+                            val tracksToAdd = resolvedTracks!!.map {
+                                Track(System.currentTimeMillis().toString() + it.title, it.title, it.streamUrl, TrackType.DRIVE_PUBLIC)
+                            }
+                            onAddDriveTracks(tracksToAdd)
+                            activeModal = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007733))
+                    ) {
+                        Text("➕ Agregar lista (${resolvedTracks!!.size})", fontSize = 11.sp)
+                    }
+                } else if (activeModal == "RED") {
                     Button(
                         onClick = {
                             onAddHttpUrl(urlInput)

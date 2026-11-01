@@ -12,6 +12,7 @@ import org.json.JSONObject
 object PlaylistRepository {
     private const val PREFS_NAME = "DriveAmpPrefs"
     private const val KEY_PLAYLIST = "saved_playlist"
+    private const val KEY_FAVORITES = "saved_favorites"
 
     /** Prefijo del mediaId de las pistas que se muestran dentro de la carpeta "Favoritos" del auto. */
     const val FAV_PREFIX = "fav:"
@@ -78,6 +79,38 @@ object PlaylistRepository {
 
     fun getMediaItems(context: Context): List<MediaItem> = toMediaItems(getTracks(context))
 
+    /** Favoritos: lista propia y permanente, independiente de la lista de reproducción. */
+    fun saveFavorites(context: Context, tracks: List<Track>) {
+        val arr = JSONArray()
+        tracks.forEach { t ->
+            arr.put(JSONObject().apply {
+                put("id", t.id); put("title", t.title); put("uri", t.uri); put("type", t.type.name)
+            })
+        }
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putString(KEY_FAVORITES, arr.toString()).apply()
+    }
+
+    fun getFavorites(context: Context): List<Track> {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val str = prefs.getString(KEY_FAVORITES, null)
+        if (str == null) {
+            // Migración: usa los favoritos que ya estaban marcados dentro de la lista
+            val migrated = getTracks(context).filter { it.isFavorite }.map { it.copy(isFavorite = true) }
+            if (migrated.isNotEmpty()) saveFavorites(context, migrated)
+            return migrated
+        }
+        val list = mutableListOf<Track>()
+        try {
+            val arr = JSONArray(str)
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                list.add(Track(o.getString("id"), o.getString("title"), o.getString("uri"),
+                    TrackType.valueOf(o.getString("type")), true))
+            }
+        } catch (e: Exception) { e.printStackTrace() }
+        return list
+    }
+
     fun getFavoriteMediaItems(context: Context): List<MediaItem> =
-        toMediaItems(getTracks(context).filter { it.isFavorite }, FAV_PREFIX)
+        toMediaItems(getFavorites(context), FAV_PREFIX)
 }

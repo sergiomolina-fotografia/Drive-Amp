@@ -78,4 +78,19 @@ dependencies {
 
     // Corrutinas para llamadas asíncronas
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("androidx.glance:glance-appwidget:1.2.0")
+}
+
+// Genera automáticamente DriveAmp.apk en app/build/outputs/apk/debug/DriveAmp.apk (compatible con Configuration Cache)
+val debugApkDirProvider = layout.buildDirectory.dir("outputs/apk/debug")
+tasks.matching { it.name == "packageDebug" || it.name == "assembleDebug" }.configureEach {
+    val dirProvider = debugApkDirProvider
+    doLast {
+        val apkDir = dirProvider.get().asFile
+        val debugApk = apkDir.resolve("app-debug.apk")
+        val namedApk = apkDir.resolve("DriveAmp.apk")
+        if (debugApk.exists()) {
+            debugApk.copyTo(namedApk, overwrite = true)
+        }
+    }
 }
