@@ -1,6 +1,7 @@
 package com.example.drive_amp
 
 import android.content.ComponentName
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
@@ -359,6 +360,8 @@ class MainActivity : ComponentActivity() {
                         onPlayClick = { startPlay() },
                         onPauseClick = { pausePlayer() },
                         onStopClick = { stopPlayer() },
+                        onMinimizeClick = { minimizeApp() },
+                        onCloseClick = { closeApp() },
                         onNextClick = { playNext() },
                         onPrevClick = { playPrev() },
                         onSeekTo = { posMs ->
@@ -723,6 +726,17 @@ class MainActivity : ComponentActivity() {
         currentPositionMs = 0L
     }
 
+    private fun minimizeApp() {
+        moveTaskToBack(true)
+    }
+
+    private fun closeApp() {
+        stopPlayer()
+        mediaController?.stop()
+        stopService(Intent(this, DriveAmpMediaService::class.java))
+        finishAndRemoveTask()
+    }
+
     private fun playNext() {
         if (playlist.isEmpty()) {
             val nextList = PlaylistRepository.getNextSavedList(this)
@@ -868,6 +882,8 @@ fun WinampPlayerScreen(
     onPlayClick: () -> Unit,
     onPauseClick: () -> Unit,
     onStopClick: () -> Unit,
+    onMinimizeClick: () -> Unit,
+    onCloseClick: () -> Unit,
     onNextClick: () -> Unit,
     onPrevClick: () -> Unit,
     onSeekTo: (Long) -> Unit,
@@ -900,7 +916,6 @@ fun WinampPlayerScreen(
     var vizToastText by remember { mutableStateOf<String?>(null) }
 
     // Ventanas acopladas desplegables (igual que en Drive-Amp-Web)
-    var showCfgWindow by remember { mutableStateOf(false) }
     var showEqWindow by remember { mutableStateOf(false) }
     var showDriveWindow by remember { mutableStateOf(false) }
     var showSearchWindow by remember { mutableStateOf(true) } // Visible como en la captura
@@ -934,9 +949,6 @@ fun WinampPlayerScreen(
     var favNameInput by remember { mutableStateOf("") }
     var favStatus by remember { mutableStateOf("Armá una lista abajo o cargá una carpeta de Drive y guardala con nombre para tenerla siempre a mano.") }
     var favStatusColor by remember { mutableStateOf(Color(0xFFFFE066)) }
-
-    var serverInput by remember(serverBaseUrl) { mutableStateOf(serverBaseUrl) }
-    var cfgStatus by remember { mutableStateOf("Servidor que resuelve y busca carpetas públicas de Google Drive.") }
 
     // Modal auxiliar cuando se guarda directamente una carpeta desde Búsqueda o desde Verificar Drive
     var pendingSaveTracks by remember { mutableStateOf<List<Track>?>(null) }
@@ -1077,45 +1089,15 @@ fun WinampPlayerScreen(
             // VENTANA 1: REPRODUCTOR PRINCIPAL (DRIVE-AMP)
             // =========================================================================
             Column(modifier = Modifier.fillMaxWidth().winampWindow()) {
-                // --- Barra de título con rayas metálicas y botón ⚙ CFG ---
+                // --- Barra de título con rayas metálicas y botones funcionales de minimizar y cerrar ---
                 WinampTitleBar(
                     title = "DRIVE-AMP",
                     gradientColors = listOf(Color(0xFF3C5A96), Color(0xFF1D2C52)),
                     showStripes = true,
                     rightContent = {
-                        // Botón ⚙ CFG idéntico a la web
-                        Box(
-                            modifier = Modifier
-                                .height(16.dp)
-                                .background(
-                                    Brush.verticalGradient(
-                                        if (showCfgWindow) listOf(Color(0xFF6B421B), Color(0xFF3A220D))
-                                        else listOf(Color(0xFF533E2D), Color(0xFF322216))
-                                    )
-                                )
-                                .border(
-                                    1.dp,
-                                    if (showCfgWindow) Color(0xFFFFAA55) else Color(0xFF947151)
-                                )
-                                .clickable {
-                                    serverInput = serverBaseUrl
-                                    showCfgWindow = !showCfgWindow
-                                }
-                                .padding(horizontal = 5.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "⚙ CFG",
-                                color = if (showCfgWindow) Color(0xFFFFAA55) else Color(0xFFFFD8A8),
-                                fontSize = 9.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(3.dp))
-                        WinampTitleSquareButton("_", bgColor = Color(0xFF353C4E)) {}
-                        Spacer(modifier = Modifier.width(3.dp))
-                        WinampTitleSquareButton("✕", bgColor = Color(0xFF8A2020)) { onStopClick() }
+                        WinampTitleSquareButton("_", bgColor = Color(0xFF353C4E)) { onMinimizeClick() }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        WinampTitleSquareButton("✕", bgColor = Color(0xFF8A2020)) { onCloseClick() }
                     }
                 )
 
@@ -1541,54 +1523,6 @@ fun WinampPlayerScreen(
                                 }
                             }
                         }
-                    }
-                }
-            }
-
-            // =========================================================================
-            // VENTANA ACOPLADA: ⚙ SERVIDOR DE DRIVE (CFG)
-            // =========================================================================
-            if (showCfgWindow) {
-                Column(modifier = Modifier.fillMaxWidth().winampWindow()) {
-                    WinampTitleBar(
-                        title = "⚙ SERVIDOR DE DRIVE",
-                        gradientColors = listOf(Color(0xFF5C3B1E), Color(0xFF311C09)),
-                        showStripes = true,
-                        rightContent = {
-                            WinampTitleSquareButton("-") { showCfgWindow = false }
-                        }
-                    )
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            WinampSunkenTextField(
-                                value = serverInput,
-                                onValueChange = { serverInput = it },
-                                placeholder = PlaylistRepository.DEFAULT_SERVER_URL,
-                                modifier = Modifier.weight(1f)
-                            )
-                            WinampSmallBevelButton(
-                                label = "GUARDAR",
-                                accentGreen = true,
-                                onClick = {
-                                    val clean = serverInput.trim().trimEnd('/')
-                                    onSaveServerUrl(clean)
-                                    cfgStatus = "✓ Servidor guardado: $clean"
-                                }
-                            )
-                        }
-                        Text(
-                            text = cfgStatus,
-                            color = Color(0xFFFFD8A8),
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
                     }
                 }
             }
@@ -2530,7 +2464,7 @@ fun WinampTitleSquareButton(
 ) {
     Box(
         modifier = Modifier
-            .size(14.dp)
+            .size(16.dp)
             .background(bgColor)
             .winampRaisedBevel()
             .clickable { onClick() },
@@ -2539,7 +2473,7 @@ fun WinampTitleSquareButton(
         Text(
             text = symbol,
             color = Color(0xFFD7DFEC),
-            fontSize = 9.sp,
+            fontSize = 10.sp,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold
         )
