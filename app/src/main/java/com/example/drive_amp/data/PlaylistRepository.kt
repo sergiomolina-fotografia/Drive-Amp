@@ -147,16 +147,65 @@ object PlaylistRepository {
     /** Prefijo de mediaId para las pistas de la lista de saved lists: "lst:<idLista>:<índice>". */
     const val LIST_ITEM_PREFIX = "lst:"
 
-    // Último estado de reproducción (lo usa el widget y para retomar desde el widget/auto)
+    // Último estado de reproducción (lo usa el widget y para retomar al reconectar el estéreo/auto)
     private const val KEY_LAST_TRACK_ID = "last_track_id"
-    // ID de la lista guardada activa (para pasar automáticamente a la siguiente lista cuando termina)
+    private const val KEY_LAST_TRACK_URI = "last_track_uri"
+    private const val KEY_LAST_TRACK_INDEX = "last_track_index"
+    private const val KEY_LAST_POSITION_MS = "last_position_ms"
+    // ID de la lista guardada activa (para recordar la carpeta actual y pasar a la siguiente solo cuando termina)
     private const val KEY_CURRENT_SAVED_LIST_ID = "current_saved_list_id"
+
+    data class PlaybackResumptionData(
+        val mediaItems: List<MediaItem>,
+        val startIndex: Int,
+        val startPositionMs: Long
+    )
 
     fun saveLastTrackId(context: Context, mediaId: String) {
         prefs(context).edit().putString(KEY_LAST_TRACK_ID, mediaId).apply()
     }
 
     fun getLastTrackId(context: Context): String? = prefs(context).getString(KEY_LAST_TRACK_ID, null)
+
+    fun getLastTrackUri(context: Context): String? = prefs(context).getString(KEY_LAST_TRACK_URI, null)
+
+    fun getLastTrackIndex(context: Context): Int = prefs(context).getInt(KEY_LAST_TRACK_INDEX, 0)
+
+    fun getLastPositionMs(context: Context): Long =
+        prefs(context).getLong(KEY_LAST_POSITION_MS, 0L).coerceAtLeast(0L)
+
+    fun saveLastPositionMs(context: Context, positionMs: Long, commit: Boolean = false) {
+        val editor = prefs(context).edit().putLong(KEY_LAST_POSITION_MS, positionMs.coerceAtLeast(0L))
+        if (commit) editor.commit() else editor.apply()
+    }
+
+    fun savePlaybackState(
+        context: Context,
+        mediaId: String?,
+        uri: String?,
+        index: Int,
+        positionMs: Long,
+        commit: Boolean = false
+    ) {
+        val editor = prefs(context).edit()
+        if (!mediaId.isNullOrBlank()) {
+            editor.putString(KEY_LAST_TRACK_ID, mediaId)
+            if (mediaId.startsWith(LIST_ITEM_PREFIX)) {
+                val listId = mediaId.removePrefix(LIST_ITEM_PREFIX).substringBeforeLast(":")
+                if (listId.isNotBlank()) {
+                    editor.putString(KEY_CURRENT_SAVED_LIST_ID, listId)
+                }
+            }
+        }
+        if (!uri.isNullOrBlank()) {
+            editor.putString(KEY_LAST_TRACK_URI, uri)
+        }
+        if (index >= 0) {
+            editor.putInt(KEY_LAST_TRACK_INDEX, index)
+        }
+        editor.putLong(KEY_LAST_POSITION_MS, positionMs.coerceAtLeast(0L))
+        if (commit) editor.commit() else editor.apply()
+    }
 
     fun saveCurrentSavedListId(context: Context, listId: String?) {
         prefs(context).edit().putString(KEY_CURRENT_SAVED_LIST_ID, listId).commit()
@@ -166,13 +215,12 @@ object PlaylistRepository {
         prefs(context).getString(KEY_CURRENT_SAVED_LIST_ID, null)
 
     /**
-     * Activa una lista guardada como la playlist actual: pisa la playlist con sus pistas y
-     * recuerda el ID de esa lista para saber cuál es la siguiente cuando termine.
+     * Activa una lista guardada como la playlist actual: usa IDs determinísticos ("lst:<idLista>:<índice>")
+     * para que la app, el widget y Android Auto compartan exactamente los mismos mediaId y posición.
      */
     fun activateSavedListAsPlaylist(context: Context, list: SavedPlaylist): List<Track> {
-        val baseTime = System.nanoTime()
         val tracks = list.tracks.mapIndexed { i, t ->
-            t.copy(id = "${baseTime}_${i}_${t.uri.hashCode()}", isFavorite = false)
+            t.copy(id = "$LIST_ITEM_PREFIX${list.id}:$i", isFavorite = false)
         }
         savePlaylist(context, tracks)
         saveCurrentSavedListId(context, list.id)
@@ -190,6 +238,68 @@ object PlaylistRepository {
         val curIdx = lists.indexOfFirst { it.id == curId }
         val nextIdx = if (curIdx >= 0) (curIdx + 1) % lists.size else 0
         return lists[nextIdx]
+    }
+
+    /**
+     * Reconstruye la cola, el índice de pista y el segundo exacto donde quedó la reproducción
+     * antes de apagar el estéreo o cerrar la conexión con el auto.
+     */
+    fun getPlaybackResumptionData(context: Context): PlaybackResumptionData {
+        val lastId = getLastTrackId(context)
+        val lastUri = getLastTrackUri(context)
+        val savedIndex = getLastTrackIndex(context)
+        val savedPosMs = getLastPositionMs(context)
+        val curListId = getCurrentSavedListId(context)
+
+        val items: List<MediaItem> = when {
+            lastId != null && lastId.startsWith(FAV_PREFIX) -> {
+                getFavoriteMediaItems(context).ifEmpty { getMediaItems(context) }
+            }
+            lastId != null && lastId.startsWith(LIST_ITEM_PREFIX) -> {
+                val listId = lastId.removePrefix(LIST_ITEM_PREFIX).substringBeforeLast(":")
+                val savedList = getSavedLists(context).firstOrNull { it.id == listId }
+                if (savedList != null && savedList.tracks.isNotEmpty()) {
+                    val tracks = activateSavedListAsPlaylist(context, savedList)
+                    toMediaItems(tracks)
+                } else {
+                    getMediaItems(context)
+                }
+            }
+            else -> {
+                val currentItems = getMediaItems(context)
+                if (currentItems.isNotEmpty()) {
+                    currentItems
+                } else if (!curListId.isNullOrBlank()) {
+                    val savedList = getSavedLists(context).firstOrNull { it.id == curListId }
+                    if (savedList != null && savedList.tracks.isNotEmpty()) {
+                        toMediaItems(activateSavedListAsPlaylist(context, savedList))
+                    } else emptyList()
+                } else {
+                    emptyList()
+                }
+            }
+        }
+
+        if (items.isEmpty()) {
+            return PlaybackResumptionData(emptyList(), 0, 0L)
+        }
+
+        val idxById = if (!lastId.isNullOrBlank()) items.indexOfFirst { it.mediaId == lastId } else -1
+        val idxByUri = if (idxById < 0 && !lastUri.isNullOrBlank()) {
+            items.indexOfFirst { it.localConfiguration?.uri?.toString() == lastUri }
+        } else -1
+
+        val resolvedIndex = when {
+            idxById >= 0 -> idxById
+            idxByUri >= 0 -> idxByUri
+            else -> savedIndex.coerceIn(0, items.size - 1)
+        }
+
+        return PlaybackResumptionData(
+            mediaItems = items,
+            startIndex = resolvedIndex,
+            startPositionMs = savedPosMs
+        )
     }
 
     /**
@@ -235,8 +345,13 @@ object PlaylistRepository {
         mediaId.startsWith(FAV_PREFIX) -> getFavoriteMediaItems(context)
         mediaId.startsWith(LIST_ITEM_PREFIX) -> {
             val listId = mediaId.removePrefix(LIST_ITEM_PREFIX).substringBeforeLast(":")
-            saveCurrentSavedListId(context, listId)
-            getSavedListMediaItems(context, listId)
+            val list = getSavedLists(context).firstOrNull { it.id == listId }
+            if (list != null) {
+                toMediaItems(activateSavedListAsPlaylist(context, list))
+            } else {
+                saveCurrentSavedListId(context, listId)
+                getSavedListMediaItems(context, listId)
+            }
         }
         else -> getMediaItems(context)
     }

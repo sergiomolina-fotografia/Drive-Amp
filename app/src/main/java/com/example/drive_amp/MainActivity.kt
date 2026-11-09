@@ -560,10 +560,8 @@ class MainActivity : ComponentActivity() {
             controller.clearMediaItems()
         }
         currentTrackIndex = -1
-        PlaylistRepository.saveCurrentSavedListId(this, list.id)
-        updatePlaylist(list.tracks.mapIndexed { i, t ->
-            t.copy(id = "${System.nanoTime()}_${i}_${t.uri.hashCode()}", isFavorite = false)
-        })
+        val newTracks = PlaylistRepository.activateSavedListAsPlaylist(this, list)
+        updatePlaylist(newTracks)
         playTrack(0)
     }
 
@@ -601,9 +599,9 @@ class MainActivity : ComponentActivity() {
             return
         }
         var idx = playlist.indexOfFirst { it.id == mediaItem.mediaId }
-        if (idx < 0 && !mediaItem.mediaId.startsWith(PlaylistRepository.FAV_PREFIX) && !mediaItem.mediaId.startsWith(PlaylistRepository.LIST_ITEM_PREFIX)) {
-            // Si el servicio limpió la lista anterior y cargó la siguiente lista guardada automáticamente,
-            // actualizamos la playlist en pantalla para que muestre la lista nueva
+        if (idx < 0 && !mediaItem.mediaId.startsWith(PlaylistRepository.FAV_PREFIX)) {
+            // Si el servicio activó una carpeta guardada o avanzó a la siguiente lista,
+            // actualizamos la playlist en pantalla para que muestre la lista activa
             val latest = PlaylistRepository.getTracks(this)
             val newIdx = latest.indexOfFirst { it.id == mediaItem.mediaId }
             if (newIdx >= 0) {
@@ -635,8 +633,8 @@ class MainActivity : ComponentActivity() {
         val n = c.mediaItemCount
         if (n == 0) return // nada cargado todavía: playTrack carga la lista completa
         val oldIds = (0 until n).map { c.getMediaItemAt(it).mediaId }
-        // Si desde el auto se está escuchando Favoritos o una lista guardada, no se toca esa cola
-        if (oldIds.any { it.startsWith(PlaylistRepository.FAV_PREFIX) || it.startsWith(PlaylistRepository.LIST_ITEM_PREFIX) }) return
+        // Si desde el auto se está escuchando Favoritos sueltos, no se toca esa cola
+        if (oldIds.any { it.startsWith(PlaylistRepository.FAV_PREFIX) }) return
         if (playlist.isEmpty()) {
             c.stop()
             c.clearMediaItems()
@@ -665,21 +663,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun playTrack(index: Int) {
+    private fun playTrack(index: Int, startPositionMs: Long = 0L) {
         if (index < 0 || index >= playlist.size) return
         currentTrackIndex = index
         isPaused = false
         val tr = playlist[index]
         currentTitle = formatMarqueeTitle(index, tr)
         currentSourceType = sourceLabel(tr.type)
+        PlaylistRepository.savePlaybackState(this, tr.id, tr.uri, index, startPositionMs, commit = true)
 
         mediaController?.let { controller ->
             if (controllerHasPlaylist(controller)) {
-                controller.seekTo(index, 0L)
+                controller.seekTo(index, startPositionMs)
             } else {
                 // Se carga la playlist COMPLETA: así Android Auto muestra toda la lista y
                 // siguiente/anterior funcionan desde el volante, la notificación y el widget
-                controller.setMediaItems(PlaylistRepository.toMediaItems(playlist), index, 0L)
+                controller.setMediaItems(PlaylistRepository.toMediaItems(playlist), index, startPositionMs)
             }
             controller.prepare()
             controller.play()
@@ -694,7 +693,9 @@ class MainActivity : ComponentActivity() {
         mediaController?.let { controller ->
             isPaused = false
             if (currentTrackIndex == -1 || controller.mediaItemCount == 0) {
-                playTrack(0)
+                val resumption = PlaylistRepository.getPlaybackResumptionData(this)
+                val targetIdx = resumption.startIndex.coerceIn(0, playlist.size - 1)
+                playTrack(targetIdx, resumption.startPositionMs)
             } else {
                 if (controller.playbackState == Player.STATE_IDLE || controller.playbackState == Player.STATE_ENDED) {
                     controller.prepare()

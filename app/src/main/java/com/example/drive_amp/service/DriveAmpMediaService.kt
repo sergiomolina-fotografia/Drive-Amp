@@ -3,6 +3,8 @@ package com.example.drive_amp.service
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -35,6 +37,16 @@ class DriveAmpMediaService : MediaLibraryService() {
     private lateinit var player: ExoPlayer
     private lateinit var mediaLibrarySession: MediaLibrarySession
     private var consecutiveErrors = 0
+    private var isRestoringState = false
+    private val positionSaveHandler = Handler(Looper.getMainLooper())
+    private val positionSaveRunnable = object : Runnable {
+        override fun run() {
+            if (::player.isInitialized && player.isPlaying) {
+                saveCurrentPlayerState(commit = false)
+                positionSaveHandler.postDelayed(this, 2000L)
+            }
+        }
+    }
 
     companion object {
         const val ROOT_ID = "DRIVE_AMP_ROOT"
@@ -42,6 +54,40 @@ class DriveAmpMediaService : MediaLibraryService() {
         const val FAVS_ID = "DRIVE_AMP_FAVS"
         const val SAVED_LISTS_ID = "DRIVE_AMP_SAVED_LISTS"
         const val SAVED_LIST_FOLDER_PREFIX = "listf:"
+    }
+
+    private fun saveCurrentPlayerState(commit: Boolean = false) {
+        if (isRestoringState || !::player.isInitialized || player.mediaItemCount == 0) return
+        val item = player.currentMediaItem ?: return
+        val uri = item.localConfiguration?.uri?.toString()
+        val idx = player.currentMediaItemIndex.coerceAtLeast(0)
+        val pos = player.currentPosition.coerceAtLeast(0L)
+        PlaylistRepository.savePlaybackState(
+            context = this,
+            mediaId = item.mediaId,
+            uri = uri,
+            index = idx,
+            positionMs = pos,
+            commit = commit
+        )
+    }
+
+    /**
+     * Si el reproductor está vacío (por ejemplo, al volver a encender y conectar el estéreo del auto),
+     * recarga exactamente la última carpeta/lista, la pista y el segundo donde había quedado.
+     */
+    private fun ensureQueueLoaded(): Boolean {
+        if (player.mediaItemCount > 0) return true
+        val resumption = PlaylistRepository.getPlaybackResumptionData(this)
+        if (resumption.mediaItems.isEmpty()) return false
+        isRestoringState = true
+        try {
+            player.setMediaItems(resumption.mediaItems, resumption.startIndex, resumption.startPositionMs)
+            player.prepare()
+        } finally {
+            isRestoringState = false
+        }
+        return true
     }
 
     private fun folder(id: String, title: String): MediaItem =
@@ -82,23 +128,58 @@ class DriveAmpMediaService : MediaLibraryService() {
     /**
      * Al elegir UNA pista (desde el auto, por ejemplo) se carga la cola completa a la que pertenece,
      * empezando por esa pista: así se ve toda la lista y siguiente/anterior del volante funcionan.
-     * Si llegan varias pistas (la app ya manda la playlist completa) se respetan tal cual.
+     * Si el estéreo reconecta pidiendo la misma pista que estaba sonando sin indicar posición,
+     * se retoma desde el segundo guardado.
      */
     private fun resolveSelection(
         items: List<MediaItem>,
         startIndex: Int,
         startPositionMs: Long
     ): MediaSession.MediaItemsWithStartPosition {
+        val lastSavedId = PlaylistRepository.getLastTrackId(this)
+        val lastSavedPos = PlaylistRepository.getLastPositionMs(this)
+
         if (items.size == 1) {
             val id = items[0].mediaId
             val queue = PlaylistRepository.queueFor(this, id)
             val idx = queue.indexOfFirst { it.mediaId == id }
-            if (idx >= 0) return MediaSession.MediaItemsWithStartPosition(queue, idx, startPositionMs)
+            if (idx >= 0) {
+                val resumePos = when {
+                    startPositionMs != C.TIME_UNSET && startPositionMs > 0L -> startPositionMs
+                    id == lastSavedId -> lastSavedPos
+                    else -> 0L
+                }
+                PlaylistRepository.savePlaybackState(
+                    context = this,
+                    mediaId = id,
+                    uri = queue[idx].localConfiguration?.uri?.toString(),
+                    index = idx,
+                    positionMs = resumePos,
+                    commit = true
+                )
+                return MediaSession.MediaItemsWithStartPosition(queue, idx, resumePos)
+            }
         }
         val resolved = items.mapNotNull { resolveOne(it) }
-        val start = if (startIndex == C.INDEX_UNSET) C.INDEX_UNSET
+        val start = if (startIndex == C.INDEX_UNSET) 0
             else startIndex.coerceIn(0, (resolved.size - 1).coerceAtLeast(0))
-        return MediaSession.MediaItemsWithStartPosition(resolved, start, startPositionMs)
+        val targetItem = resolved.getOrNull(start)
+        val resumePos = when {
+            startPositionMs != C.TIME_UNSET && startPositionMs > 0L -> startPositionMs
+            targetItem != null && targetItem.mediaId == lastSavedId -> lastSavedPos
+            else -> 0L
+        }
+        if (targetItem != null) {
+            PlaylistRepository.savePlaybackState(
+                context = this,
+                mediaId = targetItem.mediaId,
+                uri = targetItem.localConfiguration?.uri?.toString(),
+                index = start,
+                positionMs = resumePos,
+                commit = true
+            )
+        }
+        return MediaSession.MediaItemsWithStartPosition(resolved, start, resumePos)
     }
 
     /**
@@ -110,6 +191,16 @@ class DriveAmpMediaService : MediaLibraryService() {
         if (nextList != null) {
             val newTracks = PlaylistRepository.activateSavedListAsPlaylist(this, nextList)
             val newItems = PlaylistRepository.toMediaItems(newTracks)
+            newItems.firstOrNull()?.let { first ->
+                PlaylistRepository.savePlaybackState(
+                    context = this,
+                    mediaId = first.mediaId,
+                    uri = first.localConfiguration?.uri?.toString(),
+                    index = 0,
+                    positionMs = 0L,
+                    commit = true
+                )
+            }
             player.stop()
             player.setMediaItems(newItems, 0, 0L)
             player.prepare()
@@ -176,30 +267,62 @@ class DriveAmpMediaService : MediaLibraryService() {
 
         player.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                mediaItem?.let { PlaylistRepository.saveLastTrackId(this@DriveAmpMediaService, it.mediaId) }
+                if (isRestoringState || mediaItem == null) return
+                val prevId = PlaylistRepository.getLastTrackId(this@DriveAmpMediaService)
+                val isSameTrack = mediaItem.mediaId == prevId
+                val posToSave = if (isSameTrack) {
+                    player.currentPosition.coerceAtLeast(PlaylistRepository.getLastPositionMs(this@DriveAmpMediaService))
+                } else {
+                    0L
+                }
+                PlaylistRepository.savePlaybackState(
+                    context = this@DriveAmpMediaService,
+                    mediaId = mediaItem.mediaId,
+                    uri = mediaItem.localConfiguration?.uri?.toString(),
+                    index = player.currentMediaItemIndex.coerceAtLeast(0),
+                    positionMs = posToSave,
+                    commit = !isSameTrack
+                )
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_ENDED) {
+                // Solo avanza a la siguiente carpeta si la última pista de la lista actual
+                // realmente terminó de reproducirse (evita saltos falsos al reconectar el estéreo)
+                if (playbackState == Player.STATE_ENDED &&
+                    !isRestoringState &&
+                    player.mediaItemCount > 0 &&
+                    player.playWhenReady &&
+                    player.currentMediaItemIndex >= player.mediaItemCount - 1 &&
+                    player.currentPosition > 0L
+                ) {
                     advanceToNextListOrLoop()
                 }
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) consecutiveErrors = 0
+                positionSaveHandler.removeCallbacks(positionSaveRunnable)
+                if (isPlaying) {
+                    consecutiveErrors = 0
+                    positionSaveHandler.postDelayed(positionSaveRunnable, 2000L)
+                } else {
+                    // Al pausarse (ej. al apagar el estéreo del auto), guarda de inmediato carpeta, pista y segundo
+                    saveCurrentPlayerState(commit = true)
+                }
             }
 
-            // Si un enlace falla (Drive caído, archivo borrado) salta a la siguiente en vez de quedar mudo
+            // Si ocurre un error de red al apagar/encender el auto, guarda la posición actual
+            // y NUNCA salta a la siguiente carpeta por error
             override fun onPlayerError(error: PlaybackException) {
+                saveCurrentPlayerState(commit = true)
                 consecutiveErrors++
-                if (consecutiveErrors < 5) {
-                    if (player.hasNextMediaItem()) {
-                        player.seekToNextMediaItem()
-                        player.prepare()
-                        player.play()
-                    } else {
-                        advanceToNextListOrLoop()
-                    }
+                if (player.currentPosition > 0L) {
+                    // Estaba reproduciendo esta pista: conservamos la pista y posición para reintentar al dar Play
+                    return
+                }
+                if (consecutiveErrors < 3 && player.hasNextMediaItem() && player.playWhenReady) {
+                    player.seekToNextMediaItem()
+                    player.prepare()
+                    player.play()
                 }
             }
 
@@ -216,6 +339,10 @@ class DriveAmpMediaService : MediaLibraryService() {
                 }
             }
         })
+
+        // Precarga al iniciar el servicio la última carpeta/lista, canción y posición guardadas
+        ensureQueueLoaded()
+        pushWidgetState()
 
         val callback = object : MediaLibrarySession.Callback {
             override fun onGetLibraryRoot(
@@ -288,6 +415,20 @@ class DriveAmpMediaService : MediaLibraryService() {
             ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
                 return Futures.immediateFuture(resolveSelection(mediaItems, startIndex, startPositionMs))
             }
+
+            override fun onPlaybackResumption(
+                mediaSession: MediaSession,
+                controller: MediaSession.ControllerInfo
+            ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+                val resumption = PlaylistRepository.getPlaybackResumptionData(this@DriveAmpMediaService)
+                return Futures.immediateFuture(
+                    MediaSession.MediaItemsWithStartPosition(
+                        resumption.mediaItems,
+                        resumption.startIndex,
+                        resumption.startPositionMs
+                    )
+                )
+            }
         }
 
         // Tocar la notificación / el reproductor del auto abre la app
@@ -314,11 +455,32 @@ class DriveAmpMediaService : MediaLibraryService() {
                 return super.isCommandAvailable(command)
             }
 
+            override fun prepare() {
+                ensureQueueLoaded()
+                super.prepare()
+            }
+
+            override fun play() {
+                ensureQueueLoaded()
+                if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) {
+                    player.prepare()
+                }
+                super.play()
+            }
+
             override fun seekToNext() {
+                if (player.mediaItemCount == 0) {
+                    ensureQueueLoaded()
+                    return
+                }
                 if (player.hasNextMediaItem()) super.seekToNext() else advanceToNextListOrLoop()
             }
 
             override fun seekToNextMediaItem() {
+                if (player.mediaItemCount == 0) {
+                    ensureQueueLoaded()
+                    return
+                }
                 if (player.hasNextMediaItem()) super.seekToNextMediaItem() else advanceToNextListOrLoop()
             }
         }
@@ -332,7 +494,14 @@ class DriveAmpMediaService : MediaLibraryService() {
         return mediaLibrarySession
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        saveCurrentPlayerState(commit = true)
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
+        positionSaveHandler.removeCallbacks(positionSaveRunnable)
+        saveCurrentPlayerState(commit = true)
         // El widget queda mostrando la última pista, en pausa
         WidgetUpdater.push(
             this,

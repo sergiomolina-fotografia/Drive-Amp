@@ -198,16 +198,14 @@ object WidgetPlayerBridge {
             }
 
             // Si la app estaba cerrada el reproductor está vacío: se carga la playlist guardada
-            // y se retoma desde la última pista que sonó
+            // y se retoma desde la última carpeta, pista y segundo donde había quedado
             if (controller.mediaItemCount == 0) {
-                val items = PlaylistRepository.getMediaItems(context)
-                if (items.isEmpty()) {
+                val resumption = PlaylistRepository.getPlaybackResumptionData(context)
+                if (resumption.mediaItems.isEmpty()) {
                     WidgetUpdater.push(context, "PLAYLIST VACÍA", "Abre la app para agregar audios", false)
                     return@withContext
                 }
-                val last = PlaylistRepository.getLastTrackId(context)
-                val start = items.indexOfFirst { it.mediaId == last }.coerceAtLeast(0)
-                controller.setMediaItems(items, start, 0L)
+                controller.setMediaItems(resumption.mediaItems, resumption.startIndex, resumption.startPositionMs)
             }
             if (controller.playbackState == Player.STATE_IDLE || controller.playbackState == Player.STATE_ENDED) {
                 controller.prepare()
